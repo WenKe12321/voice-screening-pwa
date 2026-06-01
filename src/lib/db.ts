@@ -1,10 +1,11 @@
-import type { StoredSessionEnvelope, VaultMetadata } from '../domain/types'
+import type { PortableVoiceModel, StoredSessionEnvelope, VaultMetadata } from '../domain/types'
 
 const DB_NAME = 'voice-screening-vault'
 const DB_VERSION = 1
 const META_STORE = 'meta'
 const SESSION_STORE = 'sessions'
 const VAULT_META_KEY = 'vault'
+const PORTABLE_MODEL_KEY = 'portable-model'
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -41,6 +42,18 @@ export function loadVaultMetadata(): Promise<VaultMetadata | undefined> {
 
 export function saveVaultMetadata(metadata: VaultMetadata): Promise<IDBValidKey> {
   return withStore<IDBValidKey>(META_STORE, 'readwrite', (store) => store.put(metadata, VAULT_META_KEY))
+}
+
+export function loadPortableVoiceModel(): Promise<PortableVoiceModel | undefined> {
+  return withStore<PortableVoiceModel | undefined>(META_STORE, 'readonly', (store) => store.get(PORTABLE_MODEL_KEY))
+}
+
+export function savePortableVoiceModel(model: PortableVoiceModel): Promise<IDBValidKey> {
+  return withStore<IDBValidKey>(META_STORE, 'readwrite', (store) => store.put(model, PORTABLE_MODEL_KEY))
+}
+
+export function deletePortableVoiceModel(): Promise<undefined> {
+  return withStore<undefined>(META_STORE, 'readwrite', (store) => store.delete(PORTABLE_MODEL_KEY))
 }
 
 export function saveSession(envelope: StoredSessionEnvelope): Promise<IDBValidKey> {

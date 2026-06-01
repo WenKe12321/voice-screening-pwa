@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { PHQ9_OPTIONS, PHQ9_QUESTIONS, scorePhq9 } from './domain/phq9'
-import { RECORDING_TASKS } from './domain/recordingTasks'
-import type { PhqAnswer, RecordingArtifact, ScreeningSession, StoredSessionEnvelope, VaultMetadata } from './domain/types'
+import { EATD_RESEARCH_TASKS, STANDARD_RECORDING_TASKS } from './domain/recordingTasks'
+import type { PhqAnswer, PortableVoiceModel, RecordingArtifact, ScreeningMode, ScreeningSession, StoredSessionEnvelope, VaultMetadata } from './domain/types'
 import { useRecorder } from './hooks/useRecorder'
 import { aggregateVoiceFeatures, artifactFromBlob } from './lib/audioFeatures'
 import { createVault, decryptJson, encryptJson, unlockVault } from './lib/cryptoVault'
-import { clearVault, deleteSession, listSessionEnvelopes, loadVaultMetadata, saveSession, saveVaultMetadata } from './lib/db'
+import { clearVault, deletePortableVoiceModel, deleteSession, listSessionEnvelopes, loadPortableVoiceModel, loadVaultMetadata, savePortableVoiceModel, saveSession, saveVaultMetadata } from './lib/db'
+import { PortableVoiceModelAdapter, validatePortableVoiceModel } from './lib/portableVoiceModel'
 import { downloadResearchExport } from './lib/researchExport'
 import { DemoVoiceModelAdapter } from './lib/voiceModel'
 
@@ -52,16 +53,22 @@ function App() {
   const [questionIndex, setQuestionIndex] = useState(0)
   const [recordings, setRecordings] = useState<RecordingArtifact[]>([])
   const [recordingIndex, setRecordingIndex] = useState(0)
+  const [screeningMode, setScreeningMode] = useState<ScreeningMode>('standard')
+  const [portableModel, setPortableModel] = useState<PortableVoiceModel>()
   const [currentSession, setCurrentSession] = useState<ScreeningSession>()
   const [anonymousResearchId, setAnonymousResearchId] = useState('')
   const [history, setHistory] = useState<ScreeningSession[]>([])
   const [historyEnvelopes, setHistoryEnvelopes] = useState<Record<string, StoredSessionEnvelope>>({})
   const [error, setError] = useState('')
   const recorder = useRecorder()
-  const voiceModel = useMemo(() => new DemoVoiceModelAdapter(), [])
+  const recordingTasks = screeningMode === 'eatd-research' ? EATD_RESEARCH_TASKS : STANDARD_RECORDING_TASKS
+  const voiceModel = useMemo(() => screeningMode === 'eatd-research' && portableModel ? new PortableVoiceModelAdapter(portableModel) : new DemoVoiceModelAdapter(), [portableModel, screeningMode])
 
   useEffect(() => {
-    loadVaultMetadata().then(setVaultMetadata).finally(() => setLoading(false))
+    Promise.all([loadVaultMetadata(), loadPortableVoiceModel()]).then(([metadata, model]) => {
+      setVaultMetadata(metadata)
+      setPortableModel(model)
+    }).finally(() => setLoading(false))
     const onInstall = (event: Event) => {
       event.preventDefault()
       setInstallPrompt(event as BeforeInstallPromptEvent)
@@ -98,7 +105,8 @@ function App() {
     setScreen(target)
   }
 
-  function beginScreening() {
+  function beginScreening(mode: ScreeningMode = 'standard') {
+    setScreeningMode(mode)
     setAnswers(Array(9).fill(undefined))
     setQuestionIndex(0)
     setRecordings([])
@@ -123,11 +131,11 @@ function App() {
     try {
       const blob = await recorder.stop()
       if (blob.size < 1024) throw new Error('录音时间太短，请重新录制。')
-      const task = RECORDING_TASKS[recordingIndex]
+      const task = recordingTasks[recordingIndex]
       const artifact = await artifactFromBlob(task.id, task.title, blob)
       const nextRecordings = [...recordings, artifact]
       setRecordings(nextRecordings)
-      if (recordingIndex < RECORDING_TASKS.length - 1) {
+      if (recordingIndex < recordingTasks.length - 1) {
         setRecordingIndex((index) => index + 1)
       } else {
         await finalizeScreening(nextRecordings)
@@ -147,6 +155,7 @@ function App() {
     const session: ScreeningSession = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
+      screeningMode,
       anonymousResearchId: anonymousResearchId.trim(),
       phqAnswers,
       phqResult,
@@ -173,7 +182,19 @@ function App() {
     setVaultKey(undefined)
     setHistory([])
     setHistoryEnvelopes({})
+    setPortableModel(undefined)
     setScreen('welcome')
+  }
+
+  async function importPortableModel(file: File) {
+    const model = validatePortableVoiceModel(JSON.parse(await file.text()))
+    await savePortableVoiceModel(model)
+    setPortableModel(model)
+  }
+
+  async function removePortableModel() {
+    await deletePortableVoiceModel()
+    setPortableModel(undefined)
   }
 
   async function installApp() {
@@ -211,7 +232,7 @@ function App() {
         </section>
       )}
 
-      {screen === 'consent' && <ConsentScreen onBack={() => setScreen('welcome')} onContinue={beginScreening} />}
+      {screen === 'consent' && <ConsentScreen onBack={() => setScreen('welcome')} onContinue={() => beginScreening('standard')} />}
 
       {screen === 'vault' && (
         <VaultScreen
@@ -239,6 +260,7 @@ function App() {
       {screen === 'recording' && (
         <RecordingScreen
           index={recordingIndex}
+          tasks={recordingTasks}
           completed={recordings.length}
           supported={recorder.supported}
           recording={recorder.recording}
@@ -253,7 +275,7 @@ function App() {
       {screen === 'analyzing' && <AnalyzingScreen />}
       {screen === 'result' && currentSession && <ResultScreen session={currentSession} onHome={() => setScreen('welcome')} onHistory={() => openPrivate('history')} />}
       {screen === 'history' && <HistoryScreen sessions={history} envelopes={historyEnvelopes} vaultMetadata={vaultMetadata} onBack={() => setScreen('welcome')} onDelete={(id) => void removeHistory(id)} />}
-      {screen === 'settings' && <SettingsScreen onBack={() => setScreen('welcome')} onWipe={() => void wipeVault()} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
+      {screen === 'settings' && <SettingsScreen portableModel={portableModel} onBack={() => setScreen('welcome')} onWipe={() => void wipeVault()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
 
       {screen !== 'welcome' && screen !== 'analyzing' && (
         <footer className="privacy-footer">仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
@@ -354,9 +376,10 @@ function QuestionnaireScreen({ answers, index, anonymousResearchId, onResearchId
   )
 }
 
-function RecordingScreen({ index, completed, supported, recording, elapsed, error, onStart, onStop, onBack }: {
+function RecordingScreen({ index, completed, tasks, supported, recording, elapsed, error, onStart, onStop, onBack }: {
   index: number
   completed: number
+  tasks: typeof STANDARD_RECORDING_TASKS
   supported: boolean
   recording: boolean
   elapsed: number
@@ -365,12 +388,12 @@ function RecordingScreen({ index, completed, supported, recording, elapsed, erro
   onStop: () => void
   onBack: () => void
 }) {
-  const task = RECORDING_TASKS[index]
+  const task = tasks[index]
   return (
     <section className="page recording-page">
       <button className="back" onClick={onBack} disabled={recording}>返回</button>
       <p className="eyebrow">{task.eyebrow}</p>
-      <div className="progress"><span style={{ width: `${completed / RECORDING_TASKS.length * 100}%` }} /></div>
+      <div className="progress"><span style={{ width: `${completed / tasks.length * 100}%` }} /></div>
       <h2>{task.title}</h2>
       <div className="prompt-card"><p>{task.prompt}</p><small>{task.note}</small></div>
       {!supported && <p className="error">当前浏览器不支持录音。请通过 HTTPS 或 localhost 使用最新版 Chrome、Edge 或 Safari。</p>}
@@ -409,7 +432,7 @@ function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSessio
         <Metric label="有效语音" value={`${Math.round(voiceFeatures.activeVoiceRatio * 100)}%`} />
         <Metric label="停顿比例" value={`${Math.round(voiceFeatures.pauseRatio * 100)}%`} />
         <Metric label="基频中位数" value={`${voiceFeatures.pitchMedianHz} Hz`} />
-        <Metric label="演示指数" value={`${voiceResearchResult.demoIndex} / 100`} />
+        <Metric label={voiceResearchResult.resultKind === 'research-probability' ? '研究概率' : '演示指数'} value={`${voiceResearchResult.demoIndex} / 100`} />
       </div>
       <div className="research-note"><strong>{voiceResearchResult.label}</strong><p>{voiceResearchResult.explanation}</p></div>
       {!phqResult.urgentSupport && <SupportCard />}
@@ -440,7 +463,7 @@ function HistoryScreen({ sessions, envelopes, vaultMetadata, onBack, onDelete }:
       <div className="history-list">
         {sessions.map((session) => (
           <article className="history-card" key={session.id}>
-            <div><p className="eyebrow">{formatDate(session.createdAt)}</p><h3>{session.phqResult.label}</h3><small>PHQ-9 {session.phqResult.total}/27 · {session.recordings.length} 段加密录音</small></div>
+            <div><p className="eyebrow">{formatDate(session.createdAt)}</p><h3>{session.phqResult.label}</h3><small>PHQ-9 {session.phqResult.total}/27 · {session.recordings.length} 段加密录音 · {session.screeningMode === 'eatd-research' ? '研究采集' : '普通自测'}</small></div>
             <div className="history-actions">
               <button disabled={!vaultMetadata} onClick={() => envelopes[session.id] && vaultMetadata && downloadResearchExport(envelopes[session.id], vaultMetadata)}>导出加密包</button>
               <button className="danger" onClick={() => onDelete(session.id)}>删除</button>
@@ -452,7 +475,26 @@ function HistoryScreen({ sessions, envelopes, vaultMetadata, onBack, onDelete }:
   )
 }
 
-function SettingsScreen({ onBack, onWipe, installPrompt, onInstall }: { onBack: () => void; onWipe: () => void; installPrompt: boolean; onInstall: () => void }) {
+function SettingsScreen({ portableModel, onBack, onWipe, onImportModel, onRemoveModel, onBeginResearch, installPrompt, onInstall }: {
+  portableModel?: PortableVoiceModel
+  onBack: () => void
+  onWipe: () => void
+  onImportModel: (file: File) => Promise<void>
+  onRemoveModel: () => void
+  onBeginResearch: () => void
+  installPrompt: boolean
+  onInstall: () => void
+}) {
+  const [modelMessage, setModelMessage] = useState('')
+  const importModel = async (file?: File) => {
+    if (!file) return
+    try {
+      await onImportModel(file)
+      setModelMessage('研究模型已导入当前浏览器。')
+    } catch (caught) {
+      setModelMessage(caught instanceof Error ? caught.message : '无法导入研究模型')
+    }
+  }
   return (
     <section className="page">
       <button className="back" onClick={onBack}>返回</button>
@@ -461,6 +503,18 @@ function SettingsScreen({ onBack, onWipe, installPrompt, onInstall }: { onBack: 
       <div className="settings-list">
         <article><h3>端侧处理</h3><p>录音、问卷与语音特征只在当前设备处理，不自动上传，不需要账号。</p></article>
         <article><h3>本地加密</h3><p>应用使用 AES-GCM-256 加密数据，并通过 PBKDF2-SHA-256 从你的口令派生密钥。</p></article>
+        <article>
+          <h3>研究模型</h3>
+          <p>{portableModel ? `已导入 EATD-Corpus 研究模型。验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。` : '尚未导入研究模型。普通自测仍会使用未验证演示指数。'}</p>
+          <label className="file-button">导入 .vmodel<input type="file" accept=".vmodel,application/json" onChange={(event) => void importModel(event.target.files?.[0])} /></label>
+          {portableModel && <button className="small-button" onClick={onRemoveModel}>移除研究模型</button>}
+          {modelMessage && <p className="model-message">{modelMessage}</p>}
+        </article>
+        <article>
+          <h3>研究采集模式</h3>
+          <p>使用与 EATD-Corpus 对齐的积极、中性和困扰回答。模型概率只在该模式展示，不改变 PHQ-9 风险等级。</p>
+          <button className="small-button" onClick={onBeginResearch}>开始研究采集</button>
+        </article>
         <article><h3>安装到手机</h3><p>在支持的浏览器中，将应用添加到主屏幕后可以像普通应用一样打开。首次加载后可离线使用。</p>{installPrompt && <button className="small-button" onClick={onInstall}>添加到主屏幕</button>}</article>
       </div>
       <SupportCard />

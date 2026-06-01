@@ -6,7 +6,7 @@ export interface RecordingTask {
   note: string
 }
 
-export const RECORDING_TASKS: RecordingTask[] = [
+export const STANDARD_RECORDING_TASKS: RecordingTask[] = [
   {
     id: 'neutral-words',
     eyebrow: '标准朗读 · 01',
@@ -36,3 +36,29 @@ export const RECORDING_TASKS: RecordingTask[] = [
     note: '如果暂时不想回答，也可以说“跳过”。',
   },
 ]
+
+export const EATD_RESEARCH_TASKS: RecordingTask[] = [
+  {
+    id: 'eatd-positive',
+    eyebrow: '研究采集 · 积极回答',
+    title: '说说一件让你感到愉快的事',
+    prompt: '请回想近期一件让你感到愉快、轻松或温暖的小事，并自然地讲述它。',
+    note: '该问题用于与 EATD-Corpus 研究任务对齐。只分享你愿意表达的内容。',
+  },
+  {
+    id: 'eatd-neutral',
+    eyebrow: '研究采集 · 中性回答',
+    title: '说说最近的一段日常',
+    prompt: '请自然地描述最近一天中一段普通的日常，例如上课、吃饭、散步或休息。',
+    note: '保持自然语速即可，不需要刻意调整情绪。',
+  },
+  {
+    id: 'eatd-negative',
+    eyebrow: '研究采集 · 低落回答',
+    title: '说说一件近期的困扰',
+    prompt: '如果你愿意，请简单讲述近期一件让你感到困扰或不顺利的小事。',
+    note: '可以随时跳过或退出。该回答只保存在当前设备中。',
+  },
+]
+
+export const RECORDING_TASKS = STANDARD_RECORDING_TASKS

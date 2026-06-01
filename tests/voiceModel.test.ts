@@ -22,6 +22,7 @@ const features: VoiceFeatures = {
 describe('DemoVoiceModelAdapter', () => {
   it('returns a bounded and explicitly unvalidated demo index', async () => {
     const result = await new DemoVoiceModelAdapter().predict(features)
+    expect(result.resultKind).toBe('demo-index')
     expect(result.demoIndex).toBeGreaterThanOrEqual(0)
     expect(result.demoIndex).toBeLessThanOrEqual(100)
     expect(result.label).toContain('未验证')

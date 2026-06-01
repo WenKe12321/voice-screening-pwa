@@ -1,5 +1,7 @@
 # 心声自测
 
+当前版本：`v0.2.0`，研究模型分阶段训练版。
+
 “心声自测”是一款面向大学生群体的轻量级语音交互式心理健康辅助筛查应用。它可以安装到手机主屏幕，也可以直接在浏览器中使用。
 
 应用会引导用户完成 PHQ-9 问卷和四段简短录音，在设备本地提取语音特征，并将问卷、录音和分析结果加密保存到当前浏览器中。
@@ -148,9 +150,15 @@ npm run test:e2e
 
 ## 语音模型说明
 
-当前版本只包含 `DemoVoiceModelAdapter` 演示适配器。它输出的是未经临床验证的确定性演示指数，仅用于展示端侧流程。
+未导入模型时，应用使用 `DemoVoiceModelAdapter` 演示适配器。它输出的是未经临床验证的确定性演示指数，仅用于展示端侧流程。
 
-获得合规授权的数据并完成模型训练后，可以替换适配器实现，不需要改动界面和本地存储结构。具体步骤见 [模型接入说明](docs/model-integration.md)。
+项目已提供真实数据训练流水线。获得合规数据并通过验证门槛后，可以在“隐私与设置”页面导入 `.vmodel` 文件，并使用独立的“研究采集模式”。普通自测仍保持原流程，PHQ-9 仍是唯一风险等级来源。
+
+训练数据、模型权重和逐样本预测只保存在 `F:\Datasets\voice-screening`，不进入 Git 仓库。具体步骤见 [模型训练说明](docs/training.md) 和 [模型接入说明](docs/model-integration.md)。
+
+已完成的 EATD 真实数据实验没有达到应用启用门槛，因此当前版本不会附带真实模型权重。去标识化结果见 [EATD 中文开放回答基线汇总](docs/reports/eatd-baseline-summary.md)。
+
+已完成 Androids Corpus 朗读与访谈任务的独立五折实验。该实验使用患者/健康对照条件标签，不与 EATD、SDS 或 PHQ-9 混算，也不会生成手机端模型。去标识化结果见 [Androids 独立五折基线汇总](docs/reports/androids-baseline-summary.md)。
 
 ## 研究资料说明
 
@@ -173,4 +181,8 @@ npm run test:e2e
 
 - [隐私说明](docs/privacy.md)
 - [模型接入说明](docs/model-integration.md)
+- [模型训练说明](docs/training.md)
+- [MODMA 申请说明](docs/modma-application.md)
+- [EATD 基线汇总](docs/reports/eatd-baseline-summary.md)
+- [Androids 基线汇总](docs/reports/androids-baseline-summary.md)
 - [研究备注](docs/research-notes.md)

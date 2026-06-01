@@ -23,3 +23,24 @@ describe('audio feature extraction', () => {
     expect(summary.durationSeconds).toBe(2)
   })
 })
+
+describe('Python/browser feature parity', () => {
+  it('matches the deterministic Python reference within rounding tolerance', () => {
+    const sampleRate = 16_000
+    const samples = Float32Array.from({ length: sampleRate }, (_, index) => (
+      index >= 4_000 && index < 6_000 ? 0 : 0.18 * Math.sin(2 * Math.PI * 180 * index / sampleRate)
+    ))
+    const features = analyzeSamples('parity-reference', samples, sampleRate)
+    expect(features.durationSeconds).toBe(1)
+    expect(features.activeVoiceRatio).toBeCloseTo(0.9333, 4)
+    expect(features.pauseRatio).toBeCloseTo(0.0667, 4)
+    expect(features.rmsMean).toBeCloseTo(0.1135, 4)
+    expect(features.rmsStdDev).toBeCloseTo(0.0347, 4)
+    expect(features.zeroCrossingRate).toBeCloseTo(0.0196, 4)
+    expect(features.pitchMedianHz).toBeCloseTo(179.8, 1)
+    expect(features.pitchRangeHz).toBeCloseTo(4.1, 1)
+    expect(features.spectralCentroidHz).toBeCloseTo(757.9, 1)
+    expect(features.speechRateProxy).toBeCloseTo(28, 2)
+    expect(features.mfccMean).toEqual([-133.153, 52.832, -8.489, 34.897, -11.735, 26.686, -9.128, 19.009])
+  })
+})

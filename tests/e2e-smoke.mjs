@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
@@ -6,6 +6,26 @@ import { chromium } from 'playwright'
 const baseUrl = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:4173'
 const artifactDir = fileURLToPath(new URL('./artifacts/', import.meta.url))
 mkdirSync(artifactDir, { recursive: true })
+const portableTasks = ['eatd-positive', 'eatd-neutral', 'eatd-negative']
+const portableBaseFeatures = [
+  'durationSeconds', 'activeVoiceRatio', 'pauseRatio', 'rmsMean', 'rmsStdDev',
+  'zeroCrossingRate', 'pitchMedianHz', 'pitchRangeHz', 'spectralCentroidHz',
+  'speechRateProxy', ...Array.from({ length: 8 }, (_, index) => `mfccMean.${index}`),
+]
+const portableFeatureOrder = portableTasks.flatMap((task) => portableBaseFeatures.map((feature) => `${task}.${feature}`))
+const syntheticModelPath = join(artifactDir, 'synthetic-eligible-model.vmodel')
+writeFileSync(syntheticModelPath, JSON.stringify({
+  format: 'voice-screening-portable-model',
+  schemaVersion: 1,
+  algorithm: 'standardized-logistic-regression',
+  extractorVersion: 'browser-acoustic-features/1.0.0',
+  taskIds: portableTasks,
+  featureOrder: portableFeatureOrder,
+  scaler: { mean: Array(portableFeatureOrder.length).fill(0), scale: Array(portableFeatureOrder.length).fill(1) },
+  model: { coefficients: Array(portableFeatureOrder.length).fill(0), intercept: 0, threshold: 0.5 },
+  validation: { rocAuc: 0.76, recall: 0.72, specificity: 0.7, f1: 0.71 },
+  modelCard: { source: 'EATD-Corpus', intendedUse: 'academic-research-only', limitations: ['synthetic E2E fixture only'] },
+}, null, 2))
 
 function expect(value, message) {
   if (!value) throw new Error(message)
@@ -137,6 +157,36 @@ try {
   })
   expect(sessionCount === 0, 'IndexedDB still contains sessions after deletion')
 
+  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page.getByRole('button', { name: '隐私与设置' }).click()
+  await page.getByRole('heading', { name: '数据由你掌控' }).waitFor()
+  await page.locator('input[type="file"]').setInputFiles(syntheticModelPath)
+  await page.getByText('研究模型已导入当前浏览器').waitFor()
+  await page.getByRole('button', { name: '开始研究采集' }).click()
+  await page.getByText('PHQ-9 · 最近两周').waitFor()
+  for (let index = 0; index < 9; index += 1) {
+    await page.getByRole('button', { name: /完全没有/ }).click()
+  }
+  await page.getByRole('heading', { name: '说说一件让你感到愉快的事' }).waitFor()
+  for (const nextHeading of ['说说最近的一段日常', '说说一件近期的困扰']) {
+    await page.getByRole('button', { name: '开始录音' }).click()
+    await page.getByRole('button', { name: '结束并在本地分析' }).waitFor()
+    await page.waitForTimeout(1200)
+    await page.getByRole('button', { name: '结束并在本地分析' }).click()
+    await page.getByRole('heading', { name: nextHeading }).waitFor()
+  }
+  await page.getByRole('button', { name: '开始录音' }).click()
+  await page.getByRole('button', { name: '结束并在本地分析' }).waitFor()
+  await page.waitForTimeout(1200)
+  await page.getByRole('button', { name: '结束并在本地分析' }).click()
+  await page.getByText('SDS 标签语音研究概率').waitFor()
+  await expectNoHorizontalOverflow(page, 'research probability result page')
+  await page.getByRole('button', { name: '查看本地记录' }).click()
+  await page.getByText('3 段加密录音').waitFor()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: '删除' }).click()
+  await page.getByRole('heading', { name: '还没有本地记录' }).waitFor()
+
   await page.context().setOffline(true)
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: /听见心情/ }).waitFor()
@@ -162,6 +212,8 @@ try {
     offlineReopen: true,
     externalRequests: externalRequests.length,
     exportedEncryptedPackage: true,
+    importedSyntheticPortableModel: true,
+    researchCollectionMode: true,
     finalScreen: 'empty-history-after-delete',
   }, null, 2))
 } finally {

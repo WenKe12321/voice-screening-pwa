@@ -13,6 +13,10 @@ dist-ssr
 *.local
 tests/artifacts/
 .dev-server.*.log
+training/.cache/
+training/*.local.json
+__pycache__/
+*.pyc
 
 # Editor directories and files
 .vscode/*

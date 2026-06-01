@@ -18,6 +18,7 @@ export class DemoVoiceModelAdapter implements VoiceModelAdapter {
     const demoIndex = clamp(18 + pauseSignal + energySignal + pitchSignal + durationSignal)
     return {
       adapterVersion: this.version,
+      resultKind: 'demo-index',
       demoIndex,
       label: '未验证语音研究演示指数',
       explanation: '该指数仅用于展示端侧特征提取和模型替换流程，未经临床验证，不参与 PHQ-9 风险等级判断。',

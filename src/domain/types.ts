@@ -42,9 +42,30 @@ export interface VoiceFeatures {
 
 export interface VoiceResearchResult {
   adapterVersion: string
+  resultKind: 'demo-index' | 'research-probability'
   demoIndex: number
+  researchProbability?: number
   label: string
   explanation: string
+}
+
+export type ScreeningMode = 'standard' | 'eatd-research'
+
+export interface PortableVoiceModel {
+  format: 'voice-screening-portable-model'
+  schemaVersion: 1
+  algorithm: 'standardized-logistic-regression'
+  extractorVersion: string
+  taskIds: ['eatd-positive', 'eatd-neutral', 'eatd-negative']
+  featureOrder: string[]
+  scaler: { mean: number[]; scale: number[] }
+  model: { coefficients: number[]; intercept: number; threshold: number }
+  validation: { rocAuc: number; recall: number; specificity: number; f1: number }
+  modelCard: {
+    source: 'EATD-Corpus'
+    intendedUse: 'academic-research-only'
+    limitations: string[]
+  }
 }
 
 export interface RecordingArtifact {
@@ -58,6 +79,7 @@ export interface RecordingArtifact {
 export interface ScreeningSession {
   id: string
   createdAt: string
+  screeningMode?: ScreeningMode
   anonymousResearchId: string
   phqAnswers: PhqAnswer[]
   phqResult: PhqResult

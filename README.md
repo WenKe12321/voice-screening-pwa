@@ -1,6 +1,6 @@
 # 心声自测
 
-当前版本：`v0.2.2`，深度对照复现性修复版。
+当前版本：`v0.2.3`，中文大学生目标域数据准备版。
 
 “心声自测”是一款面向大学生群体的轻量级语音交互式心理健康辅助筛查应用。它可以安装到手机主屏幕，也可以直接在浏览器中使用。
 
@@ -160,6 +160,8 @@ npm run test:e2e
 
 已完成 Androids Corpus 朗读与访谈任务的独立五折实验。该实验使用患者/健康对照条件标签，不与 EATD、SDS 或 PHQ-9 混算，也不会生成手机端模型。去标识化结果见 [Androids 独立五折基线汇总](docs/reports/androids-baseline-summary.md)。
 
+当前尚未取得可直接用于训练的中文大学生 `PHQ-9` 目标域录音。项目已整理可申请来源、人工步骤和许可边界，见 [中文大学生目标域语音数据来源](docs/target-domain-data-sources.md)。
+
 ## 研究资料说明
 
 本项目不会分发 MODMA、AVEC 等受限数据集，也不会在仓库中附带未经授权的数据或模型。文献依据、首版限制和后续训练路线见 [研究备注](docs/research-notes.md)。
@@ -182,6 +184,7 @@ npm run test:e2e
 - [隐私说明](docs/privacy.md)
 - [模型接入说明](docs/model-integration.md)
 - [模型训练说明](docs/training.md)
+- [中文大学生目标域语音数据来源](docs/target-domain-data-sources.md)
 - [MODMA 申请说明](docs/modma-application.md)
 - [EATD 基线汇总](docs/reports/eatd-baseline-summary.md)
 - [Androids 基线汇总](docs/reports/androids-baseline-summary.md)

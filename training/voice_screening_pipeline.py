@@ -67,6 +67,76 @@ BASE_FEATURES = (
     "mfccMean.7",
 )
 FEATURE_ORDER = tuple(f"{task}.{feature}" for task in EATD_TASKS for feature in BASE_FEATURES)
+TARGET_DOMAIN_SOURCES = {
+    "eatd": {
+        "name": "EATD-Corpus",
+        "source": "https://github.com/speechandlanguageprocessing/ICASSP2022-Depression",
+        "status": "downloaded-baseline",
+        "fit": "Chinese student-volunteer baseline with audio and transcripts",
+        "limitations": [
+            "Uses SDS self-report labels rather than PHQ-9.",
+            "Uses three emotional open-response tasks rather than the standard mobile self-test tasks.",
+            "Treat as a baseline only; do not claim Chinese college-student target-domain validation.",
+        ],
+        "redistribution": "not-assumed",
+    },
+    "tcci-college-student-screening": {
+        "name": "TCCI college-student depression and anxiety screening dataset",
+        "source": "https://www.dlab.org.cn/data-set",
+        "contact": "https://www.dlab.org.cn/contact-us",
+        "contactEmail": "sdf@cheninstitute.org",
+        "status": "manual-application-required",
+        "fit": "Closest target-domain candidate: PHQ-9, reading and spontaneous speech from college students",
+        "requestedFields": [
+            "De-identified speech recordings",
+            "PHQ-9 total and item-level scores",
+            "Recording-task descriptions",
+            "Age range, sex and campus metadata where permitted",
+            "Ethics approval and informed-consent scope",
+            "Academic-use license and derived-model publication terms",
+        ],
+        "redistribution": "request-license-terms-before-use",
+    },
+    "fujian-subthreshold-reading": {
+        "name": "Fujian University of Traditional Chinese Medicine subthreshold-depression reading corpus",
+        "source": "https://cjournal.hep.com.cn/1673-4254/CN/1160172233005130687",
+        "contactEmails": ["chenmeimei1984@163.com", "yzy813@126.com"],
+        "status": "author-permission-required",
+        "fit": "Target-aligned reading candidate: college students reading the same neutral words and The North Wind and the Sun",
+        "limitations": [
+            "Uses CES-D and HAM-D inclusion criteria rather than PHQ-9.",
+            "The article does not publish a raw-audio download link.",
+        ],
+        "redistribution": "request-written-permission-before-use",
+    },
+    "seu-subcd": {
+        "name": "Southeast University SubCD multimodal behavior dataset",
+        "source": "https://aip.seu.edu.cn/2025/0622/c54088a534051/page.htm",
+        "status": "contact-research-team",
+        "fit": "Potential external-validation candidate with interview, image-description and video-description speech",
+        "limitations": [
+            "The public project page does not provide a download link.",
+            "Confirm participant population, label definitions, ethics scope and model-publication terms before use.",
+        ],
+        "redistribution": "request-written-permission-before-use",
+    },
+    "cmdc": {
+        "name": "Chinese Multimodal Depression Corpus",
+        "source": "https://github.com/CMDC-corpus/CMDC-Baseline",
+        "status": "signed-eula-required",
+        "fit": "Chinese clinical external-validation candidate, not a college-student target-domain training set",
+        "limitations": ["Clinical interview population is not the intended college-student target population."],
+        "redistribution": "prohibited-unless-license-explicitly-allows",
+    },
+    "modma": {
+        "name": "MODMA audio dataset",
+        "source": "https://modma.lzu.edu.cn/data/application/",
+        "status": "signed-eula-required",
+        "fit": "Chinese clinical external-validation candidate, not a college-student target-domain training set",
+        "limitations": ["Clinical patient/control population is not the intended college-student target population."],
+        "redistribution": "prohibited",
+    },
+}
 
 
 def utc_now() -> str:
@@ -806,6 +876,40 @@ def write_modma_checklist(root: Path) -> None:
     print("MODMA application checklist written")
 
 
+def write_target_domain_checklist(root: Path) -> None:
+    manifest_path = root / "manifests" / "datasets.local.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["targetDomain"] = {
+        "population": "adult Chinese college students",
+        "purpose": "academic research screening only; not medical diagnosis",
+        "status": "awaiting-authorized-target-domain-data",
+        "ethicsRequirement": "Obtain institutional ethics approval and confirm informed-consent scope before collecting or using non-public participant recordings.",
+        "sources": TARGET_DOMAIN_SOURCES,
+    }
+    write_json(manifest_path, manifest)
+    write_json(root / "manifests" / "target-domain-source-checklist.local.json", {
+        "schemaVersion": 1,
+        "generatedAt": utc_now(),
+        "targetPopulation": "adult Chinese college students",
+        "requiredBeforeTraining": [
+            "Record the institutional ethics approval identifier.",
+            "Record the informed-consent version and permitted research uses.",
+            "Obtain written license terms for every non-public corpus.",
+            "Store raw speech, participant metadata and derived weights only in the local F-drive workspace.",
+            "Keep participant-level development, calibration and external-validation splits isolated.",
+        ],
+        "recommendedPriority": [
+            "Apply for the TCCI college-student screening dataset first.",
+            "Request the Fujian reading corpus for task-aligned evaluation.",
+            "Ask the Southeast University team whether SubCD can be licensed for external validation.",
+            "Retain EATD only as an existing Chinese student-volunteer baseline.",
+            "Use CMDC and MODMA only as separately reported Chinese clinical external validation.",
+        ],
+        "sources": TARGET_DOMAIN_SOURCES,
+    })
+    print("Target-domain source checklist written")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", type=Path, default=WORKSPACE_DEFAULT)
@@ -832,6 +936,7 @@ def parse_args() -> argparse.Namespace:
     register_androids_parser = sub.add_parser("register-androids-archive")
     register_androids_parser.add_argument("--archive", type=Path, required=True)
     sub.add_parser("write-modma-checklist")
+    sub.add_parser("write-target-domain-checklist")
     smoke = sub.add_parser("smoke")
     smoke.add_argument("--output", type=Path)
     smoke_androids = sub.add_parser("smoke-androids")
@@ -865,6 +970,8 @@ def main() -> None:
         register_androids_archive(root, args.archive)
     elif args.command == "write-modma-checklist":
         write_modma_checklist(root)
+    elif args.command == "write-target-domain-checklist":
+        write_target_domain_checklist(root)
     elif args.command == "smoke":
         dataset = args.output or root / "raw" / "synthetic-eatd"
         generate_synthetic(dataset)

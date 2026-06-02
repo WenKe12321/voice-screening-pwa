@@ -7,7 +7,10 @@
 ```powershell
 F:\Datasets\voice-screening\.venv\Scripts\python.exe training\voice_screening_pipeline.py init-workspace
 F:\Datasets\voice-screening\.venv\Scripts\python.exe training\voice_screening_pipeline.py write-modma-checklist
+F:\Datasets\voice-screening\.venv\Scripts\python.exe training\voice_screening_pipeline.py write-target-domain-checklist
 ```
+
+`write-target-domain-checklist` 会登记中文大学生目标域语音的公开来源、申请入口和授权前置条件。当前尚未取得带明确许可范围的大学生 `PHQ-9` 目标域录音，不应将 EATD、Androids 或合成语音描述为适用于大学生的真实目标域模型。
 
 ## EATD-Corpus
 

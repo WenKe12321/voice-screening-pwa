@@ -21,6 +21,24 @@ manifests/    来源、许可和申请清单
 .venv/        隔离 Python 环境
 ```
 
+## 中文大学生目标域数据
+
+真实目标域训练需要带明确授权范围的中文大学生语音和量表数据。当前尚未取得可直接使用的 `PHQ-9` 目标域录音，因此不能声称现有权重适用于中文大学生。
+
+项目已整理可申请来源和人工步骤：
+
+```powershell
+F:\Datasets\voice-screening\.venv\Scripts\python.exe training\voice_screening_pipeline.py write-target-domain-checklist
+```
+
+清单会写入：
+
+```text
+F:\Datasets\voice-screening\manifests\target-domain-source-checklist.local.json
+```
+
+来源分级、联系入口和申请邮件模板见 [中文大学生目标域语音数据来源](target-domain-data-sources.md)。
+
 ## 初始化环境
 
 ```powershell

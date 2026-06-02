@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { aggregateVoiceFeatures, analyzeSamples } from '../src/lib/audioFeatures'
+import { afterEach, describe, expect, it } from 'vitest'
+import { aggregateVoiceFeatures, analyzeSamples, artifactFromBlob } from '../src/lib/audioFeatures'
+
+const originalAudioContext = window.AudioContext
+
+afterEach(() => {
+  window.AudioContext = originalAudioContext
+})
 
 function sineWave(frequency: number, seconds: number, sampleRate = 8_000) {
   return Float32Array.from({ length: seconds * sampleRate }, (_, index) => Math.sin(2 * Math.PI * frequency * index / sampleRate) * 0.22)
@@ -42,5 +48,23 @@ describe('Python/browser feature parity', () => {
     expect(features.spectralCentroidHz).toBeCloseTo(757.9, 1)
     expect(features.speechRateProxy).toBeCloseTo(28, 2)
     expect(features.mfccMean).toEqual([-133.153, 52.832, -8.489, 34.897, -11.735, 26.686, -9.128, 19.009])
+  })
+})
+
+describe('recorded blob decoding', () => {
+  it('returns a helpful message when the browser cannot decode a recording', async () => {
+    class RejectingAudioContext {
+      decodeAudioData() {
+        return Promise.reject(new DOMException('Unable to decode audio data'))
+      }
+
+      close() {
+        return Promise.resolve()
+      }
+    }
+
+    window.AudioContext = RejectingAudioContext as unknown as typeof AudioContext
+    await expect(artifactFromBlob('voice', '录音', new Blob(['invalid-audio'], { type: 'audio/webm' })))
+      .rejects.toThrow('无法读取这段录音，请重新录制')
   })
 })

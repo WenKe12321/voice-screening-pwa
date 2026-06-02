@@ -129,7 +129,13 @@ export async function artifactFromBlob(taskId: string, label: string, blob: Blob
   const audioContext = new AudioContextClass()
   try {
     const buffer = await blob.arrayBuffer()
-    const decoded = await audioContext.decodeAudioData(buffer.slice(0))
+    if (!buffer.byteLength) throw new Error('没有录到有效音频，请重新录制。')
+    let decoded: AudioBuffer
+    try {
+      decoded = await audioContext.decodeAudioData(buffer.slice(0))
+    } catch {
+      throw new Error('无法读取这段录音，请重新录制。建议至少录制 2 秒，并使用最新版 Chrome、Edge 或 Safari。')
+    }
     const features = analyzeSamples(taskId, decoded.getChannelData(0), decoded.sampleRate)
     return { taskId, label, mimeType: blob.type || 'audio/webm', dataBase64: bytesToBase64(new Uint8Array(buffer)), features }
   } finally {

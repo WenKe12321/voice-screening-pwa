@@ -60,6 +60,7 @@ function App() {
   const [history, setHistory] = useState<ScreeningSession[]>([])
   const [historyEnvelopes, setHistoryEnvelopes] = useState<Record<string, StoredSessionEnvelope>>({})
   const [error, setError] = useState('')
+  const [processingRecording, setProcessingRecording] = useState(false)
   const recorder = useRecorder()
   const recordingTasks = screeningMode === 'eatd-research' ? EATD_RESEARCH_TASKS : STANDARD_RECORDING_TASKS
   const voiceModel = useMemo(() => screeningMode === 'eatd-research' && portableModel ? new PortableVoiceModelAdapter(portableModel) : new DemoVoiceModelAdapter(), [portableModel, screeningMode])
@@ -128,6 +129,7 @@ function App() {
 
   async function stopRecording() {
     setError('')
+    setProcessingRecording(true)
     try {
       const blob = await recorder.stop()
       if (blob.size < 1024) throw new Error('录音时间太短，请重新录制。')
@@ -142,6 +144,8 @@ function App() {
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '录音分析失败，请重新尝试。')
+    } finally {
+      setProcessingRecording(false)
     }
   }
 
@@ -264,9 +268,13 @@ function App() {
           completed={recordings.length}
           supported={recorder.supported}
           recording={recorder.recording}
+          processing={processingRecording}
           elapsed={recorder.elapsed}
           error={error}
-          onStart={() => recorder.start().catch((caught) => setError(caught instanceof Error ? caught.message : '无法启动录音'))}
+          onStart={() => {
+            setError('')
+            recorder.start().catch((caught) => setError(caught instanceof Error ? caught.message : '无法启动录音'))
+          }}
           onStop={() => void stopRecording()}
           onBack={() => recordingIndex ? setRecordingIndex((index) => index - 1) : setScreen('questionnaire')}
         />
@@ -376,12 +384,13 @@ function QuestionnaireScreen({ answers, index, anonymousResearchId, onResearchId
   )
 }
 
-function RecordingScreen({ index, completed, tasks, supported, recording, elapsed, error, onStart, onStop, onBack }: {
+function RecordingScreen({ index, completed, tasks, supported, recording, processing, elapsed, error, onStart, onStop, onBack }: {
   index: number
   completed: number
   tasks: typeof STANDARD_RECORDING_TASKS
   supported: boolean
   recording: boolean
+  processing: boolean
   elapsed: number
   error: string
   onStart: () => void
@@ -389,17 +398,18 @@ function RecordingScreen({ index, completed, tasks, supported, recording, elapse
   onBack: () => void
 }) {
   const task = tasks[index]
+  const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`
   return (
     <section className="page recording-page">
-      <button className="back" onClick={onBack} disabled={recording}>返回</button>
+      <button className="back" onClick={onBack} disabled={recording || processing}>返回</button>
       <p className="eyebrow">{task.eyebrow}</p>
       <div className="progress"><span style={{ width: `${completed / tasks.length * 100}%` }} /></div>
       <h2>{task.title}</h2>
       <div className="prompt-card"><p>{task.prompt}</p><small>{task.note}</small></div>
       {!supported && <p className="error">当前浏览器不支持录音。请通过 HTTPS 或 localhost 使用最新版 Chrome、Edge 或 Safari。</p>}
       {error && <p className="error">{error}</p>}
-      <div className={`record-orb ${recording ? 'active' : ''}`} aria-hidden="true"><span>{recording ? `${elapsed}s` : '准备'}</span></div>
-      <button className={`primary wide ${recording ? 'stop' : ''}`} disabled={!supported} onClick={recording ? onStop : onStart}>{recording ? '结束并在本地分析' : '开始录音'}</button>
+      <div className={`record-orb ${recording ? 'active' : ''}`} aria-hidden="true"><span>{recording ? elapsedLabel : processing ? '分析中' : '准备'}</span></div>
+      <button className={`primary wide ${recording ? 'stop' : ''}`} disabled={!supported || processing} onClick={recording ? onStop : onStart}>{recording ? '结束并在本地分析' : processing ? '正在本地分析...' : '开始录音'}</button>
       <p className="microcopy">建议在安静环境中录制。音频不会离开这台设备。</p>
     </section>
   )

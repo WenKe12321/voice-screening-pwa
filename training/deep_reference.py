@@ -46,7 +46,8 @@ class GruBiLstmClassifier(nn.Module):
 
 
 def read_features(path: Path) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    with path.open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
     selected = {}
     for split in ("train", "validation"):
         split_rows = [row for row in rows if row["split"] == split]
@@ -81,9 +82,13 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true", help="Run a one-epoch synthetic architecture check")
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--features", type=Path, default=Path(r"F:\Datasets\voice-screening\processed\eatd-features.local.csv"))
-    parser.add_argument("--output", type=Path, default=Path(r"F:\Datasets\voice-screening\artifacts\deep-reference.local.pt"))
-    parser.add_argument("--report", type=Path, default=Path(r"F:\Datasets\voice-screening\reports\deep-reference-summary.local.json"))
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--report", type=Path)
     args = parser.parse_args()
+    if args.output is None:
+        args.output = Path(r"F:\Datasets\voice-screening\artifacts\deep-reference-smoke.local.pt" if args.smoke else r"F:\Datasets\voice-screening\artifacts\deep-reference.local.pt")
+    if args.report is None:
+        args.report = Path(r"F:\Datasets\voice-screening\reports\deep-reference-smoke.local.json" if args.smoke else r"F:\Datasets\voice-screening\reports\deep-reference-summary.local.json")
     random.seed(20260601)
     np.random.seed(20260601)
     torch.manual_seed(20260601)

@@ -41,6 +41,12 @@ F:\Datasets\voice-screening\.venv\Scripts\python.exe -m pip install -r training\
 F:\Datasets\voice-screening\.venv\Scripts\python.exe training\deep_reference.py --smoke
 ```
 
+烟雾测试使用独立的 `deep-reference-smoke.local.pt` 和 `deep-reference-smoke.local.json`，不会覆盖真实 EATD 深度对照产物。运行真实对照：
+
+```powershell
+F:\Datasets\voice-screening\.venv\Scripts\python.exe training\deep_reference.py
+```
+
 ## Androids 与 MODMA
 
 - Androids 下载后使用压缩包中的作者 `fold-lists.csv` 做五折实验，朗读与访谈必须分开评估。

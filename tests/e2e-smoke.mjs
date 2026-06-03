@@ -71,7 +71,7 @@ try {
   })
   expect(serviceWorkerReady, 'service worker was not registered')
 
-  await page.getByRole('button', { name: '开始一次自测' }).click()
+  await page.getByRole('button', { name: '开始正式自测' }).click()
   await page.getByRole('heading', { name: '由你掌控的本地自测' }).waitFor()
   await expectNoHorizontalOverflow(page, 'consent page')
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) {

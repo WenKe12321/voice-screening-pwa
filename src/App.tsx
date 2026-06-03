@@ -21,12 +21,37 @@ interface BeforeInstallPromptEvent extends Event {
 
 const APP_URL = 'https://wenke12321.github.io/voice-screening-pwa/'
 
+const TASK_DURATION_SECONDS: Record<string, { range: string; estimate: number }> = {
+  'neutral-words': { range: '15-30 秒', estimate: 30 },
+  'north-wind': { range: '1-2 分钟', estimate: 90 },
+  'open-routine': { range: '30-60 秒', estimate: 60 },
+  'open-support': { range: '30-60 秒', estimate: 60 },
+  'eatd-positive': { range: '30-60 秒', estimate: 60 },
+  'eatd-neutral': { range: '30-60 秒', estimate: 60 },
+  'eatd-negative': { range: '30-60 秒', estimate: 60 },
+}
+
 const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', {
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
 }).format(new Date(value))
+
+const formatMinutes = (seconds: number) => `${Math.max(1, Math.ceil(seconds / 60))} 分钟`
+
+function modelStatusText(portableModel?: PortableVoiceModel) {
+  if (!portableModel) {
+    return {
+      title: '当前语音模型：演示模式',
+      body: '普通自测会显示未验证演示指数；它不参与 PHQ-9 风险等级，也不代表医学判断。',
+    }
+  }
+  return {
+    title: '当前语音模型：EATD 研究模式',
+    body: `已导入 EATD-Corpus 研究模型，仅在研究采集模式中显示 SDS 标签研究概率。验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。`,
+  }
+}
 
 function SupportCard({ urgent = false }: { urgent?: boolean }) {
   return (
@@ -230,7 +255,10 @@ function App() {
           <p className="lead">一份在手机本地完成的心理健康辅助筛查。录音、问卷与分析结果默认加密保存在你的设备中，不会自动上传。</p>
           <div className="notice"><strong>研究原型</strong><span>本应用不能诊断抑郁症，也不能替代医生或心理咨询师。</span></div>
           <UsageGuide compact installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />
-          <button className="primary wide" onClick={() => setScreen('consent')}>开始一次自测</button>
+          <div className="home-actions">
+            <button className="primary wide" onClick={() => setScreen('consent')}>开始正式自测</button>
+            <button className="secondary-action wide" type="button" onClick={() => window.alert('快速体验模式会在下一版加入；当前正式自测会加密保存到本地保险箱。')}>快速体验模式</button>
+          </div>
           <div className="secondary-row">
             <button className="text-button" onClick={() => openPrivate('history')}>查看本地记录</button>
             <button className="text-button" onClick={() => openPrivate('settings')}>隐私与设置</button>
@@ -402,11 +430,18 @@ function RecordingScreen({ index, completed, tasks, supported, recording, proces
 }) {
   const task = tasks[index]
   const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`
+  const duration = TASK_DURATION_SECONDS[task.id] ?? { range: '30-60 秒', estimate: 60 }
+  const estimatedRemaining = tasks.slice(index).reduce((sum, item) => sum + (TASK_DURATION_SECONDS[item.id]?.estimate ?? 60), 0)
   return (
     <section className="page recording-page">
       <button className="back" onClick={onBack} disabled={recording || processing}>返回</button>
       <p className="eyebrow">{task.eyebrow}</p>
       <div className="progress"><span style={{ width: `${completed / tasks.length * 100}%` }} /></div>
+      <div className="recording-meta">
+        <span>第 {index + 1} / {tasks.length} 段</span>
+        <span>建议 {duration.range}</span>
+        <span>预计还需 {formatMinutes(estimatedRemaining)}</span>
+      </div>
       <h2>{task.title}</h2>
       <div className="prompt-card"><p>{task.prompt}</p><small>{task.note}</small></div>
       {!supported && <p className="error">当前浏览器不支持录音。请通过 HTTPS 或 localhost 使用最新版 Chrome、Edge 或 Safari。</p>}
@@ -490,7 +525,11 @@ function HistoryScreen({ sessions, envelopes, vaultMetadata, onBack, onDelete }:
 
 function UsageGuide({ compact = false, installPrompt, onInstall }: { compact?: boolean; installPrompt: boolean; onInstall: () => void }) {
   return (
-    <article className={`usage-guide ${compact ? 'compact' : ''}`}>
+    <details className={`usage-guide ${compact ? 'compact' : ''}`} open={!compact}>
+      <summary>
+        <span>可安装到手机主屏幕</span>
+        <small>录音仅在本地处理</small>
+      </summary>
       <div className="usage-head">
         <div>
           <p className="eyebrow">手机使用方式</p>
@@ -506,7 +545,7 @@ function UsageGuide({ compact = false, installPrompt, onInstall }: { compact?: b
       </ol>
       <p className="usage-note">录音权限需要 HTTPS 环境。应用不会自动上传录音、问卷或分析结果。</p>
       {installPrompt && <button className="small-button" onClick={onInstall}>添加到主屏幕</button>}
-    </article>
+    </details>
   )
 }
 
@@ -530,6 +569,7 @@ function SettingsScreen({ portableModel, onBack, onWipe, onImportModel, onRemove
       setModelMessage(caught instanceof Error ? caught.message : '无法导入研究模型')
     }
   }
+  const modelStatus = modelStatusText(portableModel)
   return (
     <section className="page">
       <button className="back" onClick={onBack}>返回</button>
@@ -538,6 +578,7 @@ function SettingsScreen({ portableModel, onBack, onWipe, onImportModel, onRemove
       <div className="settings-list">
         <article><h3>端侧处理</h3><p>录音、问卷与语音特征只在当前设备处理，不自动上传，不需要账号。</p></article>
         <article><h3>本地加密</h3><p>应用使用 AES-GCM-256 加密数据，并通过 PBKDF2-SHA-256 从你的口令派生密钥。</p></article>
+        <article><h3>{modelStatus.title}</h3><p>{modelStatus.body}</p></article>
         <article>
           <h3>研究模型</h3>
           <p>{portableModel ? `已导入 EATD-Corpus 研究模型。验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。` : '尚未导入研究模型。普通自测仍会使用未验证演示指数。'}</p>

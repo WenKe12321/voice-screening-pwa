@@ -19,6 +19,8 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
+const APP_URL = 'https://wenke12321.github.io/voice-screening-pwa/'
+
 const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', {
   month: 'short',
   day: 'numeric',
@@ -227,6 +229,7 @@ function App() {
           <h1>听见心情的<br /><em>细微变化</em></h1>
           <p className="lead">一份在手机本地完成的心理健康辅助筛查。录音、问卷与分析结果默认加密保存在你的设备中，不会自动上传。</p>
           <div className="notice"><strong>研究原型</strong><span>本应用不能诊断抑郁症，也不能替代医生或心理咨询师。</span></div>
+          <UsageGuide compact installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />
           <button className="primary wide" onClick={() => setScreen('consent')}>开始一次自测</button>
           <div className="secondary-row">
             <button className="text-button" onClick={() => openPrivate('history')}>查看本地记录</button>
@@ -485,6 +488,28 @@ function HistoryScreen({ sessions, envelopes, vaultMetadata, onBack, onDelete }:
   )
 }
 
+function UsageGuide({ compact = false, installPrompt, onInstall }: { compact?: boolean; installPrompt: boolean; onInstall: () => void }) {
+  return (
+    <article className={`usage-guide ${compact ? 'compact' : ''}`}>
+      <div className="usage-head">
+        <div>
+          <p className="eyebrow">手机使用方式</p>
+          <h3>直接打开，也可以安装到主屏幕</h3>
+        </div>
+        <a className="url-pill" href={APP_URL} target="_blank" rel="noreferrer">打开网址</a>
+      </div>
+      <p className="app-url">{APP_URL}</p>
+      <ol>
+        <li>Android：用 Chrome 或 Edge 打开上方网址，菜单中选择“安装应用”或“添加到主屏幕”。</li>
+        <li>iPhone：用 Safari 打开上方网址，点击分享按钮，再选择“添加到主屏幕”。</li>
+        <li>首次完整打开后，应用会缓存静态资源；离线时仍可重新打开已安装的应用。</li>
+      </ol>
+      <p className="usage-note">录音权限需要 HTTPS 环境。应用不会自动上传录音、问卷或分析结果。</p>
+      {installPrompt && <button className="small-button" onClick={onInstall}>添加到主屏幕</button>}
+    </article>
+  )
+}
+
 function SettingsScreen({ portableModel, onBack, onWipe, onImportModel, onRemoveModel, onBeginResearch, installPrompt, onInstall }: {
   portableModel?: PortableVoiceModel
   onBack: () => void
@@ -525,7 +550,7 @@ function SettingsScreen({ portableModel, onBack, onWipe, onImportModel, onRemove
           <p>使用与 EATD-Corpus 对齐的积极、中性和困扰回答。模型概率只在该模式展示，不改变 PHQ-9 风险等级。</p>
           <button className="small-button" onClick={onBeginResearch}>开始研究采集</button>
         </article>
-        <article><h3>安装到手机</h3><p>在支持的浏览器中，将应用添加到主屏幕后可以像普通应用一样打开。首次加载后可离线使用。</p>{installPrompt && <button className="small-button" onClick={onInstall}>添加到主屏幕</button>}</article>
+        <UsageGuide installPrompt={installPrompt} onInstall={onInstall} />
       </div>
       <SupportCard />
       <button className="danger-button wide" onClick={onWipe}>清空本地保险箱</button>

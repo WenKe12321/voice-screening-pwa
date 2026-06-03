@@ -15,6 +15,13 @@ type Screen = 'welcome' | 'consent' | 'vault' | 'questionnaire' | 'recording' | 
 type PrivateScreen = 'questionnaire' | 'history' | 'settings'
 type RunMode = 'saved' | 'quick'
 
+interface LocalDataStats {
+  sessionCount: number
+  recordingCount: number
+  latestAt?: string
+  estimatedUsageBytes?: number
+}
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
@@ -40,6 +47,11 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', {
 }).format(new Date(value))
 
 const formatMinutes = (seconds: number) => `${Math.max(1, Math.ceil(seconds / 60))} 分钟`
+const formatBytes = (value?: number) => {
+  if (!value) return '约 0 B'
+  if (value < 1024 * 1024) return `约 ${Math.max(1, Math.round(value / 1024))} KB`
+  return `约 ${(value / 1024 / 1024).toFixed(1)} MB`
+}
 
 function modelStatusText(portableModel?: PortableVoiceModel) {
   if (!portableModel) {
@@ -88,6 +100,7 @@ function App() {
   const [anonymousResearchId, setAnonymousResearchId] = useState('')
   const [history, setHistory] = useState<ScreeningSession[]>([])
   const [historyEnvelopes, setHistoryEnvelopes] = useState<Record<string, StoredSessionEnvelope>>({})
+  const [localStats, setLocalStats] = useState<LocalDataStats>({ sessionCount: 0, recordingCount: 0 })
   const [error, setError] = useState('')
   const [processingRecording, setProcessingRecording] = useState(false)
   const recorder = useRecorder()
@@ -117,6 +130,7 @@ function App() {
 
   useEffect(() => {
     if (screen === 'history' && vaultKey) void refreshHistory(vaultKey)
+    if (screen === 'settings' && vaultKey) void refreshLocalStats(vaultKey)
   }, [screen, vaultKey])
 
   async function refreshHistory(key: CryptoKey) {
@@ -124,6 +138,18 @@ function App() {
     const unlocked = await Promise.all(envelopes.map((envelope) => decryptJson<ScreeningSession>(key, envelope.payload)))
     setHistory(unlocked.sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
     setHistoryEnvelopes(Object.fromEntries(envelopes.map((envelope) => [envelope.id, envelope])))
+  }
+
+  async function refreshLocalStats(key: CryptoKey) {
+    const envelopes = await listSessionEnvelopes()
+    const sessions = await Promise.all(envelopes.map((envelope) => decryptJson<ScreeningSession>(key, envelope.payload)))
+    const storage = navigator.storage?.estimate ? await navigator.storage.estimate() : {}
+    setLocalStats({
+      sessionCount: sessions.length,
+      recordingCount: sessions.reduce((sum, session) => sum + session.recordings.length, 0),
+      latestAt: sessions.map((session) => session.createdAt).sort().at(-1),
+      estimatedUsageBytes: storage.usage,
+    })
   }
 
   function goHome() {
@@ -238,6 +264,7 @@ function App() {
     setVaultKey(undefined)
     setHistory([])
     setHistoryEnvelopes({})
+    setLocalStats({ sessionCount: 0, recordingCount: 0 })
     setPortableModel(undefined)
     setScreen('welcome')
   }
@@ -251,6 +278,27 @@ function App() {
   async function removePortableModel() {
     await deletePortableVoiceModel()
     setPortableModel(undefined)
+  }
+
+  async function exportAllEncrypted() {
+    if (!vaultMetadata) return
+    const envelopes = await listSessionEnvelopes()
+    const bundle = {
+      format: 'voice-screening-encrypted-research-package-bundle',
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      encryption: 'AES-GCM-256/PBKDF2-SHA-256',
+      vaultMetadata,
+      sessions: envelopes,
+      note: 'All sessions remain encrypted. Decrypt only with the original vault passphrase.',
+    }
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `voice-screening-all-${new Date().toISOString().slice(0, 10)}.vscreen-bundle.json`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   async function installApp() {
@@ -339,7 +387,7 @@ function App() {
       {screen === 'analyzing' && <AnalyzingScreen />}
       {screen === 'result' && currentSession && <ResultScreen session={currentSession} onHome={goHome} onHistory={() => openPrivate('history')} />}
       {screen === 'history' && <HistoryScreen sessions={history} envelopes={historyEnvelopes} vaultMetadata={vaultMetadata} onBack={goHome} onDelete={(id) => void removeHistory(id)} />}
-      {screen === 'settings' && <SettingsScreen portableModel={portableModel} onBack={goHome} onWipe={() => void wipeVault()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
+      {screen === 'settings' && <SettingsScreen portableModel={portableModel} localStats={localStats} onBack={goHome} onWipe={() => void wipeVault()} onExportAll={() => void exportAllEncrypted()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
 
       {screen !== 'welcome' && screen !== 'analyzing' && (
         <footer className="privacy-footer">{runMode === 'quick' ? '快速体验 · 不保存数据 · ' : ''}仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
@@ -580,10 +628,12 @@ function UsageGuide({ compact = false, installPrompt, onInstall }: { compact?: b
   )
 }
 
-function SettingsScreen({ portableModel, onBack, onWipe, onImportModel, onRemoveModel, onBeginResearch, installPrompt, onInstall }: {
+function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll, onImportModel, onRemoveModel, onBeginResearch, installPrompt, onInstall }: {
   portableModel?: PortableVoiceModel
+  localStats: LocalDataStats
   onBack: () => void
   onWipe: () => void
+  onExportAll: () => void
   onImportModel: (file: File) => Promise<void>
   onRemoveModel: () => void
   onBeginResearch: () => void
@@ -609,6 +659,17 @@ function SettingsScreen({ portableModel, onBack, onWipe, onImportModel, onRemove
       <div className="settings-list">
         <article><h3>端侧处理</h3><p>录音、问卷与语音特征只在当前设备处理，不自动上传，不需要账号。</p></article>
         <article><h3>本地加密</h3><p>应用使用 AES-GCM-256 加密数据，并通过 PBKDF2-SHA-256 从你的口令派生密钥。</p></article>
+        <article>
+          <h3>本地数据统计</h3>
+          <div className="stats-grid">
+            <Metric label="本地记录" value={`${localStats.sessionCount} 条`} />
+            <Metric label="加密录音" value={`${localStats.recordingCount} 段`} />
+            <Metric label="最近记录" value={localStats.latestAt ? formatDate(localStats.latestAt) : '暂无'} />
+            <Metric label="估算占用" value={formatBytes(localStats.estimatedUsageBytes)} />
+          </div>
+          <p>统计只在本机解锁后生成；不会上传，也不会显示单条问卷或录音内容。</p>
+          <button className="small-button" onClick={onExportAll} disabled={!localStats.sessionCount}>导出全部加密包</button>
+        </article>
         <article><h3>{modelStatus.title}</h3><p>{modelStatus.body}</p></article>
         <article>
           <h3>研究模型</h3>

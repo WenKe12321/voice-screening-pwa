@@ -167,6 +167,8 @@ try {
   await page.getByRole('button', { name: '返回', exact: true }).click()
   await page.getByRole('button', { name: '隐私与设置' }).click()
   await page.getByRole('heading', { name: '数据由你掌控' }).waitFor()
+  await page.getByRole('heading', { name: '本地数据统计' }).waitFor()
+  await page.getByText('0 条').waitFor()
   await page.locator('input[type="file"]').setInputFiles(syntheticModelPath)
   await page.getByText('研究模型已导入当前浏览器').waitFor()
   await page.getByRole('button', { name: '开始研究采集' }).click()

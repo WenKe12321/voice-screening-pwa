@@ -56,6 +56,11 @@ try {
   await page.getByRole('heading', { name: /听见心情/ }).waitFor()
   await expectNoHorizontalOverflow(page, 'welcome page')
   await page.screenshot({ path: join(artifactDir, 'welcome-mobile.png'), fullPage: true })
+  await page.getByRole('button', { name: '快速体验模式' }).click()
+  await page.getByRole('heading', { name: '先体验完整流程' }).waitFor()
+  await page.getByText('不会保存录音、问卷或结果').waitFor()
+  await page.getByRole('button', { name: '返回' }).click()
+  await page.getByRole('heading', { name: /听见心情/ }).waitFor()
 
   const manifest = await page.evaluate(async () => {
     const href = document.querySelector('link[rel="manifest"]')?.href

@@ -13,6 +13,7 @@ import { DemoVoiceModelAdapter } from './lib/voiceModel'
 
 type Screen = 'welcome' | 'consent' | 'vault' | 'questionnaire' | 'recording' | 'analyzing' | 'result' | 'history' | 'settings'
 type PrivateScreen = 'questionnaire' | 'history' | 'settings'
+type RunMode = 'saved' | 'quick'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -81,6 +82,7 @@ function App() {
   const [recordings, setRecordings] = useState<RecordingArtifact[]>([])
   const [recordingIndex, setRecordingIndex] = useState(0)
   const [screeningMode, setScreeningMode] = useState<ScreeningMode>('standard')
+  const [runMode, setRunMode] = useState<RunMode>('saved')
   const [portableModel, setPortableModel] = useState<PortableVoiceModel>()
   const [currentSession, setCurrentSession] = useState<ScreeningSession>()
   const [anonymousResearchId, setAnonymousResearchId] = useState('')
@@ -124,6 +126,11 @@ function App() {
     setHistoryEnvelopes(Object.fromEntries(envelopes.map((envelope) => [envelope.id, envelope])))
   }
 
+  function goHome() {
+    setRunMode('saved')
+    setScreen('welcome')
+  }
+
   function openPrivate(target: PrivateScreen) {
     if (!vaultKey) {
       setUnlockTarget(target)
@@ -133,13 +140,25 @@ function App() {
     setScreen(target)
   }
 
-  function beginScreening(mode: ScreeningMode = 'standard') {
+  function prepareScreening(nextRunMode: RunMode) {
+    setRunMode(nextRunMode)
+    setScreen('consent')
+  }
+
+  function beginScreening(mode: ScreeningMode = 'standard', requestedRunMode: RunMode = runMode) {
+    const effectiveRunMode = mode === 'eatd-research' ? 'saved' : requestedRunMode
+    setRunMode(effectiveRunMode)
     setScreeningMode(mode)
     setAnswers(Array(9).fill(undefined))
     setQuestionIndex(0)
     setRecordings([])
     setRecordingIndex(0)
     setCurrentSession(undefined)
+    setAnonymousResearchId('')
+    if (effectiveRunMode === 'quick') {
+      setScreen('questionnaire')
+      return
+    }
     openPrivate('questionnaire')
   }
 
@@ -177,7 +196,6 @@ function App() {
   }
 
   async function finalizeScreening(artifacts: RecordingArtifact[]) {
-    if (!vaultKey) throw new Error('本地保险箱尚未解锁')
     setScreen('analyzing')
     const phqAnswers = answers as PhqAnswer[]
     const phqResult = scorePhq9(phqAnswers)
@@ -187,6 +205,7 @@ function App() {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       screeningMode,
+      experienceMode: runMode === 'quick' ? 'quick' : undefined,
       anonymousResearchId: anonymousResearchId.trim(),
       phqAnswers,
       phqResult,
@@ -194,6 +213,12 @@ function App() {
       voiceResearchResult,
       recordings: artifacts,
     }
+    if (runMode === 'quick') {
+      setCurrentSession(session)
+      setScreen('result')
+      return
+    }
+    if (!vaultKey) throw new Error('本地保险箱尚未解锁')
     const envelope = { id: session.id, createdAt: session.createdAt, payload: await encryptJson(vaultKey, session) }
     await saveSession(envelope)
     setCurrentSession(session)
@@ -240,7 +265,7 @@ function App() {
   return (
     <main className="shell">
       <header className="topbar">
-        <button className="brand" onClick={() => setScreen('welcome')} aria-label="返回首页">
+        <button className="brand" onClick={goHome} aria-label="返回首页">
           <span className="brand-mark">声</span>
           <span><strong>心声自测</strong><small>本地研究原型</small></span>
         </button>
@@ -256,8 +281,8 @@ function App() {
           <div className="notice"><strong>研究原型</strong><span>本应用不能诊断抑郁症，也不能替代医生或心理咨询师。</span></div>
           <UsageGuide compact installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />
           <div className="home-actions">
-            <button className="primary wide" onClick={() => setScreen('consent')}>开始正式自测</button>
-            <button className="secondary-action wide" type="button" onClick={() => window.alert('快速体验模式会在下一版加入；当前正式自测会加密保存到本地保险箱。')}>快速体验模式</button>
+            <button className="primary wide" onClick={() => prepareScreening('saved')}>开始正式自测</button>
+            <button className="secondary-action wide" type="button" onClick={() => prepareScreening('quick')}>快速体验模式</button>
           </div>
           <div className="secondary-row">
             <button className="text-button" onClick={() => openPrivate('history')}>查看本地记录</button>
@@ -267,12 +292,12 @@ function App() {
         </section>
       )}
 
-      {screen === 'consent' && <ConsentScreen onBack={() => setScreen('welcome')} onContinue={() => beginScreening('standard')} />}
+      {screen === 'consent' && <ConsentScreen quick={runMode === 'quick'} onBack={goHome} onContinue={() => beginScreening('standard')} />}
 
       {screen === 'vault' && (
         <VaultScreen
           metadata={vaultMetadata}
-          onBack={() => setScreen('welcome')}
+          onBack={goHome}
           onReady={(key, metadata) => {
             setVaultKey(key)
             if (metadata) setVaultMetadata(metadata)
@@ -287,7 +312,7 @@ function App() {
           index={questionIndex}
           anonymousResearchId={anonymousResearchId}
           onResearchId={setAnonymousResearchId}
-          onBack={() => questionIndex ? setQuestionIndex((index) => index - 1) : setScreen('welcome')}
+          onBack={() => questionIndex ? setQuestionIndex((index) => index - 1) : goHome()}
           onAnswer={setQuestionAnswer}
         />
       )}
@@ -312,32 +337,36 @@ function App() {
       )}
 
       {screen === 'analyzing' && <AnalyzingScreen />}
-      {screen === 'result' && currentSession && <ResultScreen session={currentSession} onHome={() => setScreen('welcome')} onHistory={() => openPrivate('history')} />}
-      {screen === 'history' && <HistoryScreen sessions={history} envelopes={historyEnvelopes} vaultMetadata={vaultMetadata} onBack={() => setScreen('welcome')} onDelete={(id) => void removeHistory(id)} />}
-      {screen === 'settings' && <SettingsScreen portableModel={portableModel} onBack={() => setScreen('welcome')} onWipe={() => void wipeVault()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
+      {screen === 'result' && currentSession && <ResultScreen session={currentSession} onHome={goHome} onHistory={() => openPrivate('history')} />}
+      {screen === 'history' && <HistoryScreen sessions={history} envelopes={historyEnvelopes} vaultMetadata={vaultMetadata} onBack={goHome} onDelete={(id) => void removeHistory(id)} />}
+      {screen === 'settings' && <SettingsScreen portableModel={portableModel} onBack={goHome} onWipe={() => void wipeVault()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
 
       {screen !== 'welcome' && screen !== 'analyzing' && (
-        <footer className="privacy-footer">仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
+        <footer className="privacy-footer">{runMode === 'quick' ? '快速体验 · 不保存数据 · ' : ''}仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
       )}
     </main>
   )
 }
 
-function ConsentScreen({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }) {
+function ConsentScreen({ quick, onBack, onContinue }: { quick: boolean; onBack: () => void; onContinue: () => void }) {
   const [checks, setChecks] = useState([false, false, false])
   const toggle = (index: number) => setChecks((values) => values.map((value, position) => position === index ? !value : value))
   return (
     <section className="page">
       <button className="back" onClick={onBack}>返回</button>
-      <p className="eyebrow">开始之前</p>
-      <h2>由你掌控的本地自测</h2>
-      <p className="muted">请确认你理解以下内容。你可以随时退出，也可以在设置中删除全部数据。</p>
+      <p className="eyebrow">{quick ? '快速体验 · 不保存数据' : '开始之前'}</p>
+      <h2>{quick ? '先体验完整流程' : '由你掌控的本地自测'}</h2>
+      <p className="muted">{quick ? '这次体验不会创建保险箱，也不会保存录音、问卷或结果。关闭或返回首页后，数据会消失。' : '请确认你理解以下内容。你可以随时退出，也可以在设置中删除全部数据。'}</p>
       <div className="consent-list">
-        {[
+        {(quick ? [
+          ['辅助筛查，不是诊断', '体验结果只帮助你了解流程，不能作为医学诊断或治疗依据。'],
+          ['不会保存本次数据', '录音、问卷和分析结果只保留在本次页面状态中，不写入本地保险箱。'],
+          ['正式使用请创建保险箱', '如果你想保留记录或导出研究包，请返回首页选择正式自测。'],
+        ] : [
           ['辅助筛查，不是诊断', '结果用于帮助你关注近期状态，不能作为医学诊断或治疗依据。'],
           ['敏感数据留在设备中', '录音、问卷和分析结果会加密保存在当前浏览器，不会自动上传。'],
           ['口令无法找回', '保险箱口令不会上传或存储。忘记口令后，只能清空本地数据重新开始。'],
-        ].map(([title, copy], index) => (
+        ]).map(([title, copy], index) => (
           <label className="check-card" key={title}>
             <input type="checkbox" checked={checks[index]} onChange={() => toggle(index)} />
             <span><strong>{title}</strong><small>{copy}</small></span>
@@ -466,14 +495,16 @@ function AnalyzingScreen() {
 
 function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSession; onHome: () => void; onHistory: () => void }) {
   const { phqResult, voiceFeatures, voiceResearchResult } = session
+  const quick = session.experienceMode === 'quick'
   return (
     <section className="page">
-      <p className="eyebrow">本次自测结果</p>
+      <p className="eyebrow">{quick ? '快速体验结果' : '本次自测结果'}</p>
       <div className="result-hero">
         <span>PHQ-9 · {phqResult.total} / 27</span>
         <h2>{phqResult.label}</h2>
         <p>{phqResult.recommendation}</p>
       </div>
+      {quick && <div className="quick-result-note"><strong>这是一次未保存的体验结果</strong><p>本次录音、问卷和结果不会写入本地保险箱，也不会出现在历史记录中。</p></div>}
       {phqResult.urgentSupport && <SupportCard urgent />}
       <div className="section-heading"><h3>语音研究特征概览</h3><span>仅作展示</span></div>
       <div className="metric-grid">
@@ -484,8 +515,8 @@ function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSessio
       </div>
       <div className="research-note"><strong>{voiceResearchResult.label}</strong><p>{voiceResearchResult.explanation}</p></div>
       {!phqResult.urgentSupport && <SupportCard />}
-      <button className="primary wide" onClick={onHistory}>查看本地记录</button>
-      <button className="text-button wide" onClick={onHome}>返回首页</button>
+      {quick ? <button className="primary wide" onClick={onHome}>返回首页</button> : <button className="primary wide" onClick={onHistory}>查看本地记录</button>}
+      {!quick && <button className="text-button wide" onClick={onHome}>返回首页</button>}
     </section>
   )
 }

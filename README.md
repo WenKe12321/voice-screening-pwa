@@ -1,8 +1,14 @@
 # 心声自测
 
-当前版本：`v0.2.3`，中文大学生目标域数据准备版。
+当前版本：`v0.2.4`，手机直用部署准备版。
 
 “心声自测”是一款面向大学生群体的轻量级语音交互式心理健康辅助筛查应用。它可以安装到手机主屏幕，也可以直接在浏览器中使用。
+
+手机访问地址：
+
+```text
+https://wenke12321.github.io/voice-screening-pwa/
+```
 
 应用会引导用户完成 PHQ-9 问卷和四段简短录音，在设备本地提取语音特征，并将问卷、录音和分析结果加密保存到当前浏览器中。
 
@@ -105,13 +111,13 @@ npm run decrypt:vscreen -- "C:\path\to\research-package.vscreen" "C:\path\to\out
 
 ### Android
 
-1. 使用 Chrome 或 Edge 打开部署后的 HTTPS 地址。
+1. 使用 Chrome 或 Edge 打开 `https://wenke12321.github.io/voice-screening-pwa/`。
 2. 打开浏览器菜单。
 3. 选择“安装应用”或“添加到主屏幕”。
 
 ### iPhone
 
-1. 使用 Safari 打开部署后的 HTTPS 地址。
+1. 使用 Safari 打开 `https://wenke12321.github.io/voice-screening-pwa/`。
 2. 点击分享按钮。
 3. 选择“添加到主屏幕”。
 

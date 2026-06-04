@@ -11,7 +11,7 @@ import { PortableVoiceModelAdapter, validatePortableVoiceModel } from './lib/por
 import { downloadResearchExport } from './lib/researchExport'
 import { DemoVoiceModelAdapter } from './lib/voiceModel'
 
-type Screen = 'welcome' | 'presentation' | 'consent' | 'vault' | 'questionnaire' | 'recording' | 'analyzing' | 'result' | 'history' | 'settings'
+type Screen = 'welcome' | 'presentation' | 'share' | 'consent' | 'vault' | 'questionnaire' | 'recording' | 'analyzing' | 'result' | 'history' | 'settings'
 type PrivateScreen = 'questionnaire' | 'history' | 'settings'
 type RunMode = 'saved' | 'quick' | 'demo'
 
@@ -403,12 +403,14 @@ function App() {
           <div className="secondary-row">
             <button className="text-button" onClick={() => openPrivate('history')}>查看本地记录</button>
             <button className="text-button" onClick={() => openPrivate('settings')}>隐私与设置</button>
+            <button className="text-button" onClick={() => setScreen('share')}>分享应用</button>
           </div>
           {installPrompt && <button className="install-tip" onClick={installApp}>添加到手机主屏幕</button>}
         </section>
       )}
 
       {screen === 'presentation' && <PresentationScreen onBack={goHome} onDemo={startPresentationDemo} />}
+      {screen === 'share' && <ShareScreen onBack={goHome} />}
       {screen === 'consent' && <ConsentScreen quick={runMode === 'quick'} onBack={goHome} onContinue={() => beginScreening('standard')} />}
 
       {screen === 'vault' && (
@@ -456,7 +458,7 @@ function App() {
       {screen === 'analyzing' && <AnalyzingScreen />}
       {screen === 'result' && currentSession && <ResultScreen session={currentSession} onHome={goHome} onHistory={() => openPrivate('history')} />}
       {screen === 'history' && <HistoryScreen sessions={history} envelopes={historyEnvelopes} vaultMetadata={vaultMetadata} onBack={goHome} onDelete={(id) => void removeHistory(id)} />}
-      {screen === 'settings' && <SettingsScreen portableModel={portableModel} localStats={localStats} onBack={goHome} onWipe={() => void wipeVault()} onExportAll={() => void exportAllEncrypted()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
+      {screen === 'settings' && <SettingsScreen portableModel={portableModel} localStats={localStats} onBack={goHome} onWipe={() => void wipeVault()} onExportAll={() => void exportAllEncrypted()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} onShare={() => setScreen('share')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
 
       {screen !== 'welcome' && screen !== 'analyzing' && (
         <footer className="privacy-footer">{runMode === 'quick' ? '快速体验 · 不保存数据 · ' : runMode === 'demo' ? '答辩展示 · 模拟数据 · ' : ''}仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
@@ -478,6 +480,32 @@ function PresentationScreen({ onBack, onDemo }: { onBack: () => void; onDemo: ()
         <article><strong>不声称模型准确率</strong><span>语音指数为模拟值，只用于解释界面和研究路线。</span></article>
       </div>
       <button className="primary wide" onClick={onDemo}>查看模拟结果</button>
+    </section>
+  )
+}
+
+function ShareScreen({ onBack }: { onBack: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const copyUrl = async () => {
+    await navigator.clipboard.writeText(APP_URL)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1800)
+  }
+  return (
+    <section className="page">
+      <button className="back" onClick={onBack}>返回</button>
+      <p className="eyebrow">二维码分享</p>
+      <h2>用手机扫码打开应用</h2>
+      <p className="muted">这个二维码指向 GitHub Pages 上的正式 PWA。首次完整打开后，可添加到主屏幕并离线重开。</p>
+      <div className="qr-card">
+        <img src="./app-qr.png" alt="心声自测应用二维码" width="256" height="256" />
+        <p>{APP_URL}</p>
+      </div>
+      <div className="home-actions">
+        <button className="primary wide" onClick={() => void copyUrl()}>{copied ? '已复制链接' : '复制应用链接'}</button>
+        <a className="secondary-action wide link-action" href={APP_URL} target="_blank" rel="noreferrer">在浏览器打开</a>
+      </div>
+      <p className="usage-note">建议用手机系统浏览器打开：Android 使用 Chrome 或 Edge，iPhone 使用 Safari。</p>
     </section>
   )
 }
@@ -716,7 +744,7 @@ function UsageGuide({ compact = false, installPrompt, onInstall }: { compact?: b
   )
 }
 
-function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll, onImportModel, onRemoveModel, onBeginResearch, installPrompt, onInstall }: {
+function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll, onImportModel, onRemoveModel, onBeginResearch, onShare, installPrompt, onInstall }: {
   portableModel?: PortableVoiceModel
   localStats: LocalDataStats
   onBack: () => void
@@ -725,6 +753,7 @@ function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll
   onImportModel: (file: File) => Promise<void>
   onRemoveModel: () => void
   onBeginResearch: () => void
+  onShare: () => void
   installPrompt: boolean
   onInstall: () => void
 }) {
@@ -770,6 +799,11 @@ function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll
           <h3>研究采集模式</h3>
           <p>使用与 EATD-Corpus 对齐的积极、中性和困扰回答。模型概率只在该模式展示，不改变 PHQ-9 风险等级。</p>
           <button className="small-button" onClick={onBeginResearch}>开始研究采集</button>
+        </article>
+        <article>
+          <h3>二维码分享</h3>
+          <p>打开二维码分享页，用手机扫码访问当前 GitHub Pages 应用，也可以复制链接发给同组成员。</p>
+          <button className="small-button" onClick={onShare}>打开分享页</button>
         </article>
         <UsageGuide installPrompt={installPrompt} onInstall={onInstall} />
       </div>

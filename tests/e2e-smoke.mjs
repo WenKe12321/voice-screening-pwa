@@ -68,6 +68,14 @@ try {
   await page.getByText('答辩展示模拟语音指数').waitFor()
   await page.locator('section.page button.primary', { hasText: '返回首页' }).click()
   await page.getByRole('heading', { name: /听见心情/ }).waitFor()
+  await page.getByRole('button', { name: '分享应用' }).click()
+  await page.getByRole('heading', { name: '用手机扫码打开应用' }).waitFor()
+  await page.getByAltText('心声自测应用二维码').waitFor()
+  const qrLoaded = await page.getByAltText('心声自测应用二维码').evaluate((image) => image instanceof HTMLImageElement && image.naturalWidth > 0)
+  expect(qrLoaded, 'share QR image did not load')
+  await page.getByText('https://wenke12321.github.io/voice-screening-pwa/').waitFor()
+  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page.getByRole('heading', { name: /听见心情/ }).waitFor()
 
   const manifest = await page.evaluate(async () => {
     const href = document.querySelector('link[rel="manifest"]')?.href

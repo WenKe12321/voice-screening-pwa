@@ -22,12 +22,30 @@ interface LocalDataStats {
   estimatedUsageBytes?: number
 }
 
+interface CampusSupportConfig {
+  name: string
+  phone: string
+  location: string
+  hours: string
+  url: string
+  note: string
+}
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
 const APP_URL = 'https://wenke12321.github.io/voice-screening-pwa/'
+const CAMPUS_SUPPORT_STORAGE_KEY = 'voice-screening-campus-support'
+const DEFAULT_CAMPUS_SUPPORT: CampusSupportConfig = {
+  name: '校内心理中心',
+  phone: '',
+  location: '',
+  hours: '',
+  url: '',
+  note: '请在设置页补充本校心理中心联系方式，便于结果页展示校内支持资源。',
+}
 
 const TASK_DURATION_SECONDS: Record<string, { range: string; estimate: number }> = {
   'neutral-words': { range: '15-30 秒', estimate: 30 },
@@ -63,6 +81,17 @@ function modelStatusText(portableModel?: PortableVoiceModel) {
   return {
     title: '当前语音模型：EATD 研究模式',
     body: `已导入 EATD-Corpus 研究模型，仅在研究采集模式中显示 SDS 标签研究概率。验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。`,
+  }
+}
+
+function loadCampusSupportConfig(): CampusSupportConfig {
+  try {
+    const raw = localStorage.getItem(CAMPUS_SUPPORT_STORAGE_KEY)
+    if (!raw) return DEFAULT_CAMPUS_SUPPORT
+    const parsed = JSON.parse(raw) as Partial<CampusSupportConfig>
+    return { ...DEFAULT_CAMPUS_SUPPORT, ...parsed }
+  } catch {
+    return DEFAULT_CAMPUS_SUPPORT
   }
 }
 
@@ -127,12 +156,27 @@ function createPresentationSession(): ScreeningSession {
   }
 }
 
-function SupportCard({ urgent = false }: { urgent?: boolean }) {
+function SupportCard({ urgent = false, campusSupport = DEFAULT_CAMPUS_SUPPORT }: { urgent?: boolean; campusSupport?: CampusSupportConfig }) {
+  const hasCampusContact = Boolean(campusSupport.phone.trim() || campusSupport.location.trim() || campusSupport.hours.trim() || campusSupport.url.trim())
   return (
     <aside className={`support-card ${urgent ? 'urgent' : ''}`} aria-label="心理支持资源">
       <p className="eyebrow">{urgent ? '请优先照顾当下的安全' : '需要有人聊聊时'}</p>
       <h3>{urgent ? '你不必独自面对这一刻' : '支持一直在这里'}</h3>
       <p>{urgent ? '如果你正考虑伤害自己，请立即联系身边可信任的人，并拨打心理援助热线或紧急服务。' : '如果近期情绪持续困扰你，可以主动联系专业人员。'}</p>
+      <div className="campus-support">
+        <strong>{campusSupport.name || DEFAULT_CAMPUS_SUPPORT.name}</strong>
+        {hasCampusContact ? (
+          <>
+            {campusSupport.phone && <a href={`tel:${campusSupport.phone}`}>{campusSupport.phone}</a>}
+            {campusSupport.location && <span>{campusSupport.location}</span>}
+            {campusSupport.hours && <span>{campusSupport.hours}</span>}
+            {campusSupport.url && <a href={campusSupport.url} target="_blank" rel="noreferrer">校内支持页面</a>}
+            {campusSupport.note && <small>{campusSupport.note}</small>}
+          </>
+        ) : (
+          <small>{campusSupport.note || DEFAULT_CAMPUS_SUPPORT.note}</small>
+        )}
+      </div>
       <div className="support-actions">
         <a href="tel:12356">心理援助热线 12356</a>
         {urgent && <a href="tel:120">紧急医疗 120</a>}
@@ -157,6 +201,7 @@ function App() {
   const [screeningMode, setScreeningMode] = useState<ScreeningMode>('standard')
   const [runMode, setRunMode] = useState<RunMode>('saved')
   const [portableModel, setPortableModel] = useState<PortableVoiceModel>()
+  const [campusSupport, setCampusSupport] = useState<CampusSupportConfig>(loadCampusSupportConfig)
   const [currentSession, setCurrentSession] = useState<ScreeningSession>()
   const [anonymousResearchId, setAnonymousResearchId] = useState('')
   const [history, setHistory] = useState<ScreeningSession[]>([])
@@ -375,6 +420,19 @@ function App() {
     setInstallPrompt(undefined)
   }
 
+  function saveCampusSupport(next: CampusSupportConfig) {
+    const normalized = {
+      name: next.name.trim() || DEFAULT_CAMPUS_SUPPORT.name,
+      phone: next.phone.trim(),
+      location: next.location.trim(),
+      hours: next.hours.trim(),
+      url: next.url.trim(),
+      note: next.note.trim(),
+    }
+    localStorage.setItem(CAMPUS_SUPPORT_STORAGE_KEY, JSON.stringify(normalized))
+    setCampusSupport(normalized)
+  }
+
   if (loading) return <main className="shell centered"><p>正在打开本地应用...</p></main>
 
   return (
@@ -456,9 +514,9 @@ function App() {
       )}
 
       {screen === 'analyzing' && <AnalyzingScreen />}
-      {screen === 'result' && currentSession && <ResultScreen session={currentSession} onHome={goHome} onHistory={() => openPrivate('history')} />}
+      {screen === 'result' && currentSession && <ResultScreen session={currentSession} campusSupport={campusSupport} onHome={goHome} onHistory={() => openPrivate('history')} />}
       {screen === 'history' && <HistoryScreen sessions={history} envelopes={historyEnvelopes} vaultMetadata={vaultMetadata} onBack={goHome} onDelete={(id) => void removeHistory(id)} />}
-      {screen === 'settings' && <SettingsScreen portableModel={portableModel} localStats={localStats} onBack={goHome} onWipe={() => void wipeVault()} onExportAll={() => void exportAllEncrypted()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} onShare={() => setScreen('share')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
+      {screen === 'settings' && <SettingsScreen portableModel={portableModel} localStats={localStats} campusSupport={campusSupport} onBack={goHome} onWipe={() => void wipeVault()} onExportAll={() => void exportAllEncrypted()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} onShare={() => setScreen('share')} onSaveCampusSupport={saveCampusSupport} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
 
       {screen !== 'welcome' && screen !== 'analyzing' && (
         <footer className="privacy-footer">{runMode === 'quick' ? '快速体验 · 不保存数据 · ' : runMode === 'demo' ? '答辩展示 · 模拟数据 · ' : ''}仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
@@ -655,7 +713,7 @@ function AnalyzingScreen() {
   )
 }
 
-function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSession; onHome: () => void; onHistory: () => void }) {
+function ResultScreen({ session, campusSupport, onHome, onHistory }: { session: ScreeningSession; campusSupport: CampusSupportConfig; onHome: () => void; onHistory: () => void }) {
   const { phqResult, voiceFeatures, voiceResearchResult } = session
   const quick = session.experienceMode === 'quick'
   const presentation = session.experienceMode === 'presentation'
@@ -669,7 +727,7 @@ function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSessio
       </div>
       {quick && <div className="quick-result-note"><strong>这是一次未保存的体验结果</strong><p>本次录音、问卷和结果不会写入本地保险箱，也不会出现在历史记录中。</p></div>}
       {presentation && <div className="quick-result-note"><strong>这是答辩展示模拟结果</strong><p>本页数据由应用内置生成，不来自真实用户，不包含录音，也不会保存到本地保险箱。</p></div>}
-      {phqResult.urgentSupport && <SupportCard urgent />}
+      {phqResult.urgentSupport && <SupportCard urgent campusSupport={campusSupport} />}
       <div className="section-heading"><h3>语音研究特征概览</h3><span>仅作展示</span></div>
       <div className="metric-grid">
         <Metric label="有效语音" value={`${Math.round(voiceFeatures.activeVoiceRatio * 100)}%`} />
@@ -678,7 +736,7 @@ function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSessio
         <Metric label={voiceResearchResult.resultKind === 'research-probability' ? '研究概率' : '演示指数'} value={`${voiceResearchResult.demoIndex} / 100`} />
       </div>
       <div className="research-note"><strong>{voiceResearchResult.label}</strong><p>{voiceResearchResult.explanation}</p></div>
-      {!phqResult.urgentSupport && <SupportCard />}
+      {!phqResult.urgentSupport && <SupportCard campusSupport={campusSupport} />}
       {quick || presentation ? <button className="primary wide" onClick={onHome}>返回首页</button> : <button className="primary wide" onClick={onHistory}>查看本地记录</button>}
       {!quick && !presentation && <button className="text-button wide" onClick={onHome}>返回首页</button>}
     </section>
@@ -744,9 +802,10 @@ function UsageGuide({ compact = false, installPrompt, onInstall }: { compact?: b
   )
 }
 
-function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll, onImportModel, onRemoveModel, onBeginResearch, onShare, installPrompt, onInstall }: {
+function SettingsScreen({ portableModel, localStats, campusSupport, onBack, onWipe, onExportAll, onImportModel, onRemoveModel, onBeginResearch, onShare, onSaveCampusSupport, installPrompt, onInstall }: {
   portableModel?: PortableVoiceModel
   localStats: LocalDataStats
+  campusSupport: CampusSupportConfig
   onBack: () => void
   onWipe: () => void
   onExportAll: () => void
@@ -754,10 +813,21 @@ function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll
   onRemoveModel: () => void
   onBeginResearch: () => void
   onShare: () => void
+  onSaveCampusSupport: (config: CampusSupportConfig) => void
   installPrompt: boolean
   onInstall: () => void
 }) {
   const [modelMessage, setModelMessage] = useState('')
+  const [supportDraft, setSupportDraft] = useState(campusSupport)
+  const [supportMessage, setSupportMessage] = useState('')
+  const updateSupportDraft = (field: keyof CampusSupportConfig, value: string) => {
+    setSupportDraft((current) => ({ ...current, [field]: value }))
+    setSupportMessage('')
+  }
+  const saveSupportDraft = () => {
+    onSaveCampusSupport(supportDraft)
+    setSupportMessage('校内联系方式已保存到当前浏览器。')
+  }
   const importModel = async (file?: File) => {
     if (!file) return
     try {
@@ -805,9 +875,21 @@ function SettingsScreen({ portableModel, localStats, onBack, onWipe, onExportAll
           <p>打开二维码分享页，用手机扫码访问当前 GitHub Pages 应用，也可以复制链接发给同组成员。</p>
           <button className="small-button" onClick={onShare}>打开分享页</button>
         </article>
+        <article>
+          <h3>校内心理中心联系方式</h3>
+          <p>这些信息只保存在当前浏览器，用于结果页和求助卡片展示。请根据本校官方公开信息填写。</p>
+          <label className="field compact"><span>机构名称</span><input value={supportDraft.name} onChange={(event) => updateSupportDraft('name', event.target.value)} placeholder="例如：某某大学心理健康教育中心" /></label>
+          <label className="field compact"><span>电话</span><input value={supportDraft.phone} onChange={(event) => updateSupportDraft('phone', event.target.value)} placeholder="例如：010-12345678" inputMode="tel" /></label>
+          <label className="field compact"><span>地点</span><input value={supportDraft.location} onChange={(event) => updateSupportDraft('location', event.target.value)} placeholder="例如：学生服务中心 302" /></label>
+          <label className="field compact"><span>开放时间</span><input value={supportDraft.hours} onChange={(event) => updateSupportDraft('hours', event.target.value)} placeholder="例如：周一至周五 9:00-17:00" /></label>
+          <label className="field compact"><span>网页链接</span><input value={supportDraft.url} onChange={(event) => updateSupportDraft('url', event.target.value)} placeholder="https://..." inputMode="url" /></label>
+          <label className="field compact"><span>备注</span><textarea value={supportDraft.note} onChange={(event) => updateSupportDraft('note', event.target.value)} rows={3} placeholder="例如：如遇夜间紧急情况，请联系辅导员或校园安保。" /></label>
+          <button className="small-button" onClick={saveSupportDraft}>保存校内联系方式</button>
+          {supportMessage && <p className="model-message">{supportMessage}</p>}
+        </article>
         <UsageGuide installPrompt={installPrompt} onInstall={onInstall} />
       </div>
-      <SupportCard />
+      <SupportCard campusSupport={campusSupport} />
       <button className="danger-button wide" onClick={onWipe}>清空本地保险箱</button>
     </section>
   )

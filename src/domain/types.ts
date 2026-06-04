@@ -80,7 +80,7 @@ export interface ScreeningSession {
   id: string
   createdAt: string
   screeningMode?: ScreeningMode
-  experienceMode?: 'quick'
+  experienceMode?: 'quick' | 'presentation'
   anonymousResearchId: string
   phqAnswers: PhqAnswer[]
   phqResult: PhqResult

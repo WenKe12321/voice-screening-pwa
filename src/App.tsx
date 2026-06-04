@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { PHQ9_OPTIONS, PHQ9_QUESTIONS, scorePhq9 } from './domain/phq9'
 import { EATD_RESEARCH_TASKS, STANDARD_RECORDING_TASKS } from './domain/recordingTasks'
-import type { PhqAnswer, PortableVoiceModel, RecordingArtifact, ScreeningMode, ScreeningSession, StoredSessionEnvelope, VaultMetadata } from './domain/types'
+import type { PhqAnswer, PortableVoiceModel, RecordingArtifact, ScreeningMode, ScreeningSession, StoredSessionEnvelope, TaskFeatures, VaultMetadata, VoiceFeatures } from './domain/types'
 import { useRecorder } from './hooks/useRecorder'
 import { aggregateVoiceFeatures, artifactFromBlob } from './lib/audioFeatures'
 import { createVault, decryptJson, encryptJson, unlockVault } from './lib/cryptoVault'
@@ -11,9 +11,9 @@ import { PortableVoiceModelAdapter, validatePortableVoiceModel } from './lib/por
 import { downloadResearchExport } from './lib/researchExport'
 import { DemoVoiceModelAdapter } from './lib/voiceModel'
 
-type Screen = 'welcome' | 'consent' | 'vault' | 'questionnaire' | 'recording' | 'analyzing' | 'result' | 'history' | 'settings'
+type Screen = 'welcome' | 'presentation' | 'consent' | 'vault' | 'questionnaire' | 'recording' | 'analyzing' | 'result' | 'history' | 'settings'
 type PrivateScreen = 'questionnaire' | 'history' | 'settings'
-type RunMode = 'saved' | 'quick'
+type RunMode = 'saved' | 'quick' | 'demo'
 
 interface LocalDataStats {
   sessionCount: number
@@ -63,6 +63,67 @@ function modelStatusText(portableModel?: PortableVoiceModel) {
   return {
     title: '当前语音模型：EATD 研究模式',
     body: `已导入 EATD-Corpus 研究模型，仅在研究采集模式中显示 SDS 标签研究概率。验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。`,
+  }
+}
+
+function createPresentationTaskFeatures(taskId: string, label: string, durationSeconds: number, activeVoiceRatio: number, pauseRatio: number, pitchMedianHz: number): TaskFeatures {
+  return {
+    taskId,
+    durationSeconds,
+    activeVoiceRatio,
+    pauseRatio,
+    rmsMean: 0.047,
+    rmsStdDev: 0.018,
+    zeroCrossingRate: 0.076,
+    pitchMedianHz,
+    pitchRangeHz: 92,
+    spectralCentroidHz: 1420,
+    mfccMean: [-18.4, 4.2, -2.1, 1.8, -0.9, 0.7, -0.4, 0.2],
+    speechRateProxy: label.length / Math.max(1, durationSeconds),
+  }
+}
+
+function createPresentationSession(): ScreeningSession {
+  const phqAnswers: PhqAnswer[] = [1, 1, 1, 1, 1, 0, 0, 0, 0]
+  const taskFeatures = [
+    createPresentationTaskFeatures('neutral-words', '十个中性词', 24, 0.74, 0.26, 178),
+    createPresentationTaskFeatures('north-wind', '北风与太阳朗读', 78, 0.69, 0.31, 172),
+    createPresentationTaskFeatures('open-routine', '日常节奏回答', 42, 0.63, 0.37, 169),
+    createPresentationTaskFeatures('open-support', '支持事件回答', 39, 0.66, 0.34, 171),
+  ]
+  const voiceFeatures: VoiceFeatures = {
+    schemaVersion: 1,
+    taskCount: taskFeatures.length,
+    durationSeconds: taskFeatures.reduce((sum, task) => sum + task.durationSeconds, 0),
+    activeVoiceRatio: 0.68,
+    pauseRatio: 0.32,
+    rmsMean: 0.047,
+    rmsStdDev: 0.018,
+    zeroCrossingRate: 0.076,
+    pitchMedianHz: 172,
+    pitchRangeHz: 92,
+    spectralCentroidHz: 1420,
+    mfccMean: [-18.4, 4.2, -2.1, 1.8, -0.9, 0.7, -0.4, 0.2],
+    speechRateProxy: 0.31,
+    tasks: taskFeatures,
+  }
+  return {
+    id: 'presentation-demo-session',
+    createdAt: new Date().toISOString(),
+    screeningMode: 'standard',
+    experienceMode: 'presentation',
+    anonymousResearchId: 'DEFENSE-DEMO',
+    phqAnswers,
+    phqResult: scorePhq9(phqAnswers),
+    voiceFeatures,
+    voiceResearchResult: {
+      adapterVersion: 'presentation-demo/1.0.0',
+      resultKind: 'demo-index',
+      demoIndex: 42,
+      label: '答辩展示模拟语音指数',
+      explanation: '这是一组模拟数据，仅用于展示交互、结果页和隐私边界，不来自真实用户，也不是训练模型输出。',
+    },
+    recordings: [],
   }
 }
 
@@ -169,6 +230,12 @@ function App() {
   function prepareScreening(nextRunMode: RunMode) {
     setRunMode(nextRunMode)
     setScreen('consent')
+  }
+
+  function startPresentationDemo() {
+    setRunMode('demo')
+    setCurrentSession(createPresentationSession())
+    setScreen('result')
   }
 
   function beginScreening(mode: ScreeningMode = 'standard', requestedRunMode: RunMode = runMode) {
@@ -331,6 +398,7 @@ function App() {
           <div className="home-actions">
             <button className="primary wide" onClick={() => prepareScreening('saved')}>开始正式自测</button>
             <button className="secondary-action wide" type="button" onClick={() => prepareScreening('quick')}>快速体验模式</button>
+            <button className="secondary-action wide" type="button" onClick={() => setScreen('presentation')}>答辩展示模式</button>
           </div>
           <div className="secondary-row">
             <button className="text-button" onClick={() => openPrivate('history')}>查看本地记录</button>
@@ -340,6 +408,7 @@ function App() {
         </section>
       )}
 
+      {screen === 'presentation' && <PresentationScreen onBack={goHome} onDemo={startPresentationDemo} />}
       {screen === 'consent' && <ConsentScreen quick={runMode === 'quick'} onBack={goHome} onContinue={() => beginScreening('standard')} />}
 
       {screen === 'vault' && (
@@ -390,9 +459,26 @@ function App() {
       {screen === 'settings' && <SettingsScreen portableModel={portableModel} localStats={localStats} onBack={goHome} onWipe={() => void wipeVault()} onExportAll={() => void exportAllEncrypted()} onImportModel={importPortableModel} onRemoveModel={() => void removePortableModel()} onBeginResearch={() => beginScreening('eatd-research', 'saved')} installPrompt={Boolean(installPrompt)} onInstall={() => void installApp()} />}
 
       {screen !== 'welcome' && screen !== 'analyzing' && (
-        <footer className="privacy-footer">{runMode === 'quick' ? '快速体验 · 不保存数据 · ' : ''}仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
+        <footer className="privacy-footer">{runMode === 'quick' ? '快速体验 · 不保存数据 · ' : runMode === 'demo' ? '答辩展示 · 模拟数据 · ' : ''}仅本地处理 · 录音不会自动上传 · 非医疗诊断工具</footer>
       )}
     </main>
+  )
+}
+
+function PresentationScreen({ onBack, onDemo }: { onBack: () => void; onDemo: () => void }) {
+  return (
+    <section className="page">
+      <button className="back" onClick={onBack}>返回</button>
+      <p className="eyebrow">答辩展示模式</p>
+      <h2>不用录音，也能展示完整结果页</h2>
+      <p className="muted">这个模式为现场汇报准备：使用一组内置模拟数据，跳过麦克风权限、保险箱和保存流程，直接展示 PHQ-9 结果、语音特征概览、求助资源与隐私边界。</p>
+      <div className="demo-grid">
+        <article><strong>不采集真人数据</strong><span>不会请求麦克风，也不会生成录音文件。</span></article>
+        <article><strong>不写入本地保险箱</strong><span>返回首页后展示结果即消失，不进入历史记录。</span></article>
+        <article><strong>不声称模型准确率</strong><span>语音指数为模拟值，只用于解释界面和研究路线。</span></article>
+      </div>
+      <button className="primary wide" onClick={onDemo}>查看模拟结果</button>
+    </section>
   )
 }
 
@@ -544,15 +630,17 @@ function AnalyzingScreen() {
 function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSession; onHome: () => void; onHistory: () => void }) {
   const { phqResult, voiceFeatures, voiceResearchResult } = session
   const quick = session.experienceMode === 'quick'
+  const presentation = session.experienceMode === 'presentation'
   return (
     <section className="page">
-      <p className="eyebrow">{quick ? '快速体验结果' : '本次自测结果'}</p>
+      <p className="eyebrow">{presentation ? '答辩展示结果' : quick ? '快速体验结果' : '本次自测结果'}</p>
       <div className="result-hero">
         <span>PHQ-9 · {phqResult.total} / 27</span>
         <h2>{phqResult.label}</h2>
         <p>{phqResult.recommendation}</p>
       </div>
       {quick && <div className="quick-result-note"><strong>这是一次未保存的体验结果</strong><p>本次录音、问卷和结果不会写入本地保险箱，也不会出现在历史记录中。</p></div>}
+      {presentation && <div className="quick-result-note"><strong>这是答辩展示模拟结果</strong><p>本页数据由应用内置生成，不来自真实用户，不包含录音，也不会保存到本地保险箱。</p></div>}
       {phqResult.urgentSupport && <SupportCard urgent />}
       <div className="section-heading"><h3>语音研究特征概览</h3><span>仅作展示</span></div>
       <div className="metric-grid">
@@ -563,8 +651,8 @@ function ResultScreen({ session, onHome, onHistory }: { session: ScreeningSessio
       </div>
       <div className="research-note"><strong>{voiceResearchResult.label}</strong><p>{voiceResearchResult.explanation}</p></div>
       {!phqResult.urgentSupport && <SupportCard />}
-      {quick ? <button className="primary wide" onClick={onHome}>返回首页</button> : <button className="primary wide" onClick={onHistory}>查看本地记录</button>}
-      {!quick && <button className="text-button wide" onClick={onHome}>返回首页</button>}
+      {quick || presentation ? <button className="primary wide" onClick={onHome}>返回首页</button> : <button className="primary wide" onClick={onHistory}>查看本地记录</button>}
+      {!quick && !presentation && <button className="text-button wide" onClick={onHome}>返回首页</button>}
     </section>
   )
 }

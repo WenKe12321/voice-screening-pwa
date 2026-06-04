@@ -59,7 +59,14 @@ try {
   await page.getByRole('button', { name: '快速体验模式' }).click()
   await page.getByRole('heading', { name: '先体验完整流程' }).waitFor()
   await page.getByText('不会保存录音、问卷或结果').waitFor()
-  await page.getByRole('button', { name: '返回' }).click()
+  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page.getByRole('heading', { name: /听见心情/ }).waitFor()
+  await page.getByRole('button', { name: '答辩展示模式' }).click()
+  await page.getByRole('heading', { name: '不用录音，也能展示完整结果页' }).waitFor()
+  await page.getByRole('button', { name: '查看模拟结果' }).click()
+  await page.getByText('答辩展示结果').waitFor()
+  await page.getByText('答辩展示模拟语音指数').waitFor()
+  await page.locator('section.page button.primary', { hasText: '返回首页' }).click()
   await page.getByRole('heading', { name: /听见心情/ }).waitFor()
 
   const manifest = await page.evaluate(async () => {

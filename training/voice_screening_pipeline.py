@@ -67,6 +67,50 @@ BASE_FEATURES = (
     "mfccMean.7",
 )
 FEATURE_ORDER = tuple(f"{task}.{feature}" for task in EATD_TASKS for feature in BASE_FEATURES)
+NESTED_LEARNING_FRAMEWORK = {
+    "frameworkVersion": "nested-learning/1.0.0",
+    "targetPopulation": "Chinese college students",
+    "currentModelStage": "public-chinese-baseline",
+    "calibrationStatus": "not-calibrated",
+    "layers": [
+        {
+            "id": "segment-features",
+            "name": "语音片段特征层",
+            "status": "implemented",
+            "input": "Raw WAV for each prompt",
+            "output": "Browser-compatible acoustic feature vector per recording",
+        },
+        {
+            "id": "task-representation",
+            "name": "任务级表示层",
+            "status": "implemented",
+            "input": "Positive, neutral and negative prompt feature vectors",
+            "output": "Task-preserving subject-level feature matrix",
+        },
+        {
+            "id": "individual-risk-model",
+            "name": "个体筛查模型层",
+            "status": "baseline-only",
+            "input": "Subject-isolated training features and SDS labels",
+            "output": "Research probability from standardized logistic regression",
+        },
+        {
+            "id": "target-domain-calibration",
+            "name": "中文大学生目标域适配层",
+            "status": "requires-target-data",
+            "input": "Licensed Chinese college-student speech with PHQ-9 labels",
+            "output": "Calibrated target-domain threshold and validation report",
+        },
+        {
+            "id": "continuous-validation",
+            "name": "持续评估更新层",
+            "status": "planned",
+            "input": "Frozen model, versioned datasets and external validation cohorts",
+            "output": "Model card, activation gate, confidence intervals and audit trail",
+        },
+    ],
+    "caution": "EATD is a public Chinese SDS baseline. Do not describe it as calibrated for Chinese college students until licensed PHQ-9 target-domain validation is complete.",
+}
 TARGET_DOMAIN_SOURCES = {
     "eatd": {
         "name": "EATD-Corpus",
@@ -487,6 +531,7 @@ def train_baselines(features: Path, artifact_dir: Path, report_dir: Path) -> Non
         "extractorVersion": EXTRACTOR_VERSION,
         "subjects": {"train": len(train_ids), "validation": len(validation_ids)},
         "activationGate": {"rocAuc": ACTIVATION_ROC_AUC, "recall": ACTIVATION_RECALL, "eligible": eligible},
+        "nestedLearning": NESTED_LEARNING_FRAMEWORK,
         "selectedThreshold": round_to(threshold, 6),
         "selectedModelValidation": validation,
         "baselineComparison": comparison,
@@ -513,6 +558,7 @@ def train_baselines(features: Path, artifact_dir: Path, report_dir: Path) -> Non
             "source": "EATD-Corpus",
             "intendedUse": "academic-research-only",
             "limitations": report["limitations"],
+            "nestedLearning": NESTED_LEARNING_FRAMEWORK,
         },
     }
     candidate = artifact_dir / "eatd-logistic.candidate.vmodel"

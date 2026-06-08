@@ -38,11 +38,26 @@ interface PortableVoiceModel {
     source: 'EATD-Corpus'
     intendedUse: 'academic-research-only'
     limitations: string[]
+    nestedLearning?: NestedLearningFramework
   }
 }
 ```
 
 设置页会校验结构版本、特征提取器版本、任务列表、特征顺序、权重维度和验证门槛。通过校验后，模型保存在当前浏览器 IndexedDB 中。
+
+## 多层嵌套学习元数据
+
+新训练流水线会在 `modelCard.nestedLearning` 中写入五层学习框架：
+
+1. 语音片段特征层。
+2. 任务级表示层。
+3. 个体筛查模型层。
+4. 中文大学生目标域适配层。
+5. 持续评估更新层。
+
+该字段用于说明模型处于哪一阶段，而不是提高模型权限。当前 EATD 模型阶段为 `public-chinese-baseline`，校准状态为 `not-calibrated`，因此不能宣称适用于中文大学生目标域。只有获得合规中文大学生 PHQ-9 目标域语音并完成外部验证后，才可进入 `target-domain-calibrated` 阶段。
+
+详见 [多层嵌套学习框架](nested-learning-framework.md)。
 
 ## 特征结构
 

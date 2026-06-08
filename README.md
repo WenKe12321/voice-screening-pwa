@@ -160,7 +160,7 @@ npm run test:e2e
 
 项目已提供真实数据训练流水线。获得合规数据并通过验证门槛后，可以在“隐私与设置”页面导入 `.vmodel` 文件，并使用独立的“研究采集模式”。普通自测仍保持原流程，PHQ-9 仍是唯一风险等级来源。
 
-训练数据、模型权重和逐样本预测只保存在 `F:\Datasets\voice-screening`，不进入 Git 仓库。具体步骤见 [模型训练说明](docs/training.md) 和 [模型接入说明](docs/model-integration.md)。
+训练数据、模型权重和逐样本预测只保存在 `F:\Datasets\voice-screening`，不进入 Git 仓库。具体步骤见 [模型训练说明](docs/training.md)、[模型接入说明](docs/model-integration.md) 和 [多层嵌套学习框架](docs/nested-learning-framework.md)。
 
 已完成的 EATD 真实数据实验没有达到应用启用门槛，因此当前版本不会附带真实模型权重。去标识化结果见 [EATD 中文开放回答基线汇总](docs/reports/eatd-baseline-summary.md)。
 
@@ -190,6 +190,7 @@ npm run test:e2e
 - [隐私说明](docs/privacy.md)
 - [模型接入说明](docs/model-integration.md)
 - [模型训练说明](docs/training.md)
+- [多层嵌套学习框架](docs/nested-learning-framework.md)
 - [中文大学生目标域语音数据来源](docs/target-domain-data-sources.md)
 - [MODMA 申请说明](docs/modma-application.md)
 - [EATD 基线汇总](docs/reports/eatd-baseline-summary.md)

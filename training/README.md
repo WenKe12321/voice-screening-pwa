@@ -26,6 +26,18 @@ F:\Datasets\voice-screening\.venv\Scripts\python.exe training\voice_screening_pi
 
 只有验证集 `ROC-AUC >= 0.70` 且召回率 `>= 0.70` 时，才会生成 `eatd-logistic.importable.vmodel`。
 
+## 多层嵌套学习框架
+
+训练流水线会把五层框架写入报告和 `.vmodel` 的 `modelCard.nestedLearning`：
+
+1. 语音片段特征层：每段录音独立提取端侧一致特征。
+2. 任务级表示层：保留积极、中性、困扰三个任务来源。
+3. 个体筛查模型层：使用受试者隔离划分训练标准化逻辑回归基线。
+4. 中文大学生目标域适配层：等待合规 PHQ-9 目标域语音后做校准。
+5. 持续评估更新层：记录模型卡、验证门槛、置信区间和审计轨迹。
+
+当前 EATD 只处于 `public-chinese-baseline` 阶段，`calibrationStatus` 为 `not-calibrated`。在没有中文大学生目标域验证前，不应把模型描述为“适用于中文大学生”。
+
 ## 合成数据烟雾测试
 
 合成数据只用于检查流水线，不代表真实模型效果：

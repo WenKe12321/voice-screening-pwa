@@ -13,6 +13,20 @@ const portableBaseFeatures = [
   'speechRateProxy', ...Array.from({ length: 8 }, (_, index) => `mfccMean.${index}`),
 ]
 const portableFeatureOrder = portableTasks.flatMap((task) => portableBaseFeatures.map((feature) => `${task}.${feature}`))
+const nestedLearning = {
+  frameworkVersion: 'nested-learning/1.0.0',
+  targetPopulation: 'Chinese college students',
+  currentModelStage: 'public-chinese-baseline',
+  calibrationStatus: 'not-calibrated',
+  caution: 'E2E fixture: public Chinese baseline only; target-domain PHQ-9 calibration is still required.',
+  layers: [
+    { id: 'segment-features', name: '语音片段特征层', status: 'implemented', input: 'raw audio', output: 'features' },
+    { id: 'task-representation', name: '任务级表示层', status: 'implemented', input: 'task features', output: 'task matrix' },
+    { id: 'individual-risk-model', name: '个体筛查模型层', status: 'baseline-only', input: 'training matrix', output: 'research probability' },
+    { id: 'target-domain-calibration', name: '中文大学生目标域适配层', status: 'requires-target-data', input: 'PHQ-9 target-domain data', output: 'calibrated threshold' },
+    { id: 'continuous-validation', name: '持续评估更新层', status: 'planned', input: 'external cohorts', output: 'model card' },
+  ],
+}
 const syntheticModelPath = join(artifactDir, 'synthetic-eligible-model.vmodel')
 writeFileSync(syntheticModelPath, JSON.stringify({
   format: 'voice-screening-portable-model',
@@ -24,7 +38,7 @@ writeFileSync(syntheticModelPath, JSON.stringify({
   scaler: { mean: Array(portableFeatureOrder.length).fill(0), scale: Array(portableFeatureOrder.length).fill(1) },
   model: { coefficients: Array(portableFeatureOrder.length).fill(0), intercept: 0, threshold: 0.5 },
   validation: { rocAuc: 0.76, recall: 0.72, specificity: 0.7, f1: 0.71 },
-  modelCard: { source: 'EATD-Corpus', intendedUse: 'academic-research-only', limitations: ['synthetic E2E fixture only'] },
+  modelCard: { source: 'EATD-Corpus', intendedUse: 'academic-research-only', limitations: ['synthetic E2E fixture only'], nestedLearning },
 }, null, 2))
 
 function expect(value, message) {
@@ -183,6 +197,7 @@ try {
   await page.getByRole('button', { name: '隐私与设置' }).click()
   await page.getByRole('heading', { name: '数据由你掌控' }).waitFor()
   await page.getByRole('heading', { name: '本地数据统计' }).waitFor()
+  await page.getByRole('heading', { name: '多层嵌套学习框架' }).waitFor()
   await page.getByText('0 条').waitFor()
   await page.getByLabel('机构名称').fill('测试大学心理健康教育中心')
   await page.getByLabel('电话').fill('010-12345678')
@@ -196,6 +211,7 @@ try {
   await page.getByText('010-12345678').waitFor()
   await page.locator('input[type="file"]').setInputFiles(syntheticModelPath)
   await page.getByText('研究模型已导入当前浏览器').waitFor()
+  await page.getByText('公开中文基线，尚未完成中文大学生目标域校准').waitFor()
   await page.getByRole('button', { name: '开始研究采集' }).click()
   await page.getByText('PHQ-9 · 最近两周').waitFor()
   for (let index = 0; index < 9; index += 1) {

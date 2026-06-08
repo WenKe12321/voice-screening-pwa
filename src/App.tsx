@@ -78,11 +78,23 @@ function modelStatusText(portableModel?: PortableVoiceModel) {
       body: '普通自测会显示未验证演示指数；它不参与 PHQ-9 风险等级，也不代表医学判断。',
     }
   }
+  const nested = portableModel.modelCard.nestedLearning
+  const nestedNote = nested
+    ? `多层嵌套学习阶段：${nested.currentModelStage === 'public-chinese-baseline' ? '公开中文基线，尚未完成中文大学生目标域校准' : nested.currentModelStage}。`
+    : '该模型未携带嵌套学习元数据。'
   return {
     title: '当前语音模型：EATD 研究模式',
-    body: `已导入 EATD-Corpus 研究模型，仅在研究采集模式中显示 SDS 标签研究概率。验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。`,
+    body: `已导入 EATD-Corpus 研究模型，仅在研究采集模式中显示 SDS 标签研究概率。${nestedNote}验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。`,
   }
 }
+
+const DEFAULT_NESTED_LEARNING_LAYERS = [
+  ['语音片段特征层', '每段录音独立提取能量、停顿、基频、频谱和 MFCC 摘要。'],
+  ['任务级表示层', '保留积极、中性、困扰等任务来源，避免过早混合。'],
+  ['个体筛查模型层', '使用受试者隔离训练的线性概率模型输出研究概率。'],
+  ['中文大学生目标域适配层', '获得合规目标域数据后做 PHQ-9 校准和外部验证。'],
+  ['持续评估更新层', '每次模型更新都记录数据版本、指标、门槛和模型卡。'],
+] as const
 
 function loadCampusSupportConfig(): CampusSupportConfig {
   try {
@@ -858,6 +870,28 @@ function SettingsScreen({ portableModel, localStats, campusSupport, onBack, onWi
           <button className="small-button" onClick={onExportAll} disabled={!localStats.sessionCount}>导出全部加密包</button>
         </article>
         <article><h3>{modelStatus.title}</h3><p>{modelStatus.body}</p></article>
+        <article>
+          <h3>多层嵌套学习框架</h3>
+          <p>{portableModel?.modelCard.nestedLearning?.caution ?? '当前应用先固定端侧特征和任务结构，再接入可替换的研究模型；没有中文大学生 PHQ-9 目标域数据前，不声称模型适用于该人群。'}</p>
+          <div className="layer-list">
+            {(portableModel?.modelCard.nestedLearning?.layers ?? DEFAULT_NESTED_LEARNING_LAYERS.map(([name, body], index) => ({
+              id: String(index),
+              name,
+              status: index < 3 ? 'implemented' : 'requires-target-data',
+              input: body,
+              output: index < 3 ? '已在原型中实现' : '等待合规目标域数据',
+            }))).map((layer, index) => (
+              <div className="layer-item" key={layer.id}>
+                <span>{index + 1}</span>
+                <div>
+                  <strong>{layer.name}</strong>
+                  <small>{layer.input} → {layer.output}</small>
+                </div>
+                <em>{layer.status === 'implemented' ? '已实现' : layer.status === 'baseline-only' ? '基线' : layer.status === 'requires-target-data' ? '需目标域数据' : '计划'}</em>
+              </div>
+            ))}
+          </div>
+        </article>
         <article>
           <h3>研究模型</h3>
           <p>{portableModel ? `已导入 EATD-Corpus 研究模型。验证集 ROC-AUC ${portableModel.validation.rocAuc.toFixed(2)}，召回率 ${portableModel.validation.recall.toFixed(2)}。` : '尚未导入研究模型。普通自测仍会使用未验证演示指数。'}</p>

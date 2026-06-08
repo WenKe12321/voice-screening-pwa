@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from training.voice_screening_pipeline import EATD_FILES, parse_android_folds, validate_androids, validate_eatd
+from training.voice_screening_pipeline import EATD_FILES, NESTED_LEARNING_FRAMEWORK, parse_android_folds, validate_androids, validate_eatd
 
 
 def write_eatd_subject(root: Path, split: str, subject: str, score: str = "42.5", missing: str | None = None) -> None:
@@ -80,6 +80,23 @@ class AndroidsValidationTest(unittest.TestCase):
             (dataset / "fold-list.csv").write_text("filename,fold\n02_PF21_2.wav,1\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "does not cover"):
                 validate_androids(dataset)
+
+
+class NestedLearningFrameworkTest(unittest.TestCase):
+    def test_framework_records_five_ordered_layers(self) -> None:
+        self.assertEqual(NESTED_LEARNING_FRAMEWORK["frameworkVersion"], "nested-learning/1.0.0")
+        self.assertEqual(NESTED_LEARNING_FRAMEWORK["targetPopulation"], "Chinese college students")
+        self.assertEqual(
+            [layer["id"] for layer in NESTED_LEARNING_FRAMEWORK["layers"]],
+            [
+                "segment-features",
+                "task-representation",
+                "individual-risk-model",
+                "target-domain-calibration",
+                "continuous-validation",
+            ],
+        )
+        self.assertEqual(NESTED_LEARNING_FRAMEWORK["calibrationStatus"], "not-calibrated")
 
 
 if __name__ == "__main__":

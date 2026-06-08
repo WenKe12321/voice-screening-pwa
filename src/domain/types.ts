@@ -65,7 +65,25 @@ export interface PortableVoiceModel {
     source: 'EATD-Corpus'
     intendedUse: 'academic-research-only'
     limitations: string[]
+    nestedLearning?: NestedLearningFramework
   }
+}
+
+export interface NestedLearningLayer {
+  id: 'segment-features' | 'task-representation' | 'individual-risk-model' | 'target-domain-calibration' | 'continuous-validation'
+  name: string
+  status: 'implemented' | 'baseline-only' | 'requires-target-data' | 'planned'
+  input: string
+  output: string
+}
+
+export interface NestedLearningFramework {
+  frameworkVersion: 'nested-learning/1.0.0'
+  targetPopulation: 'Chinese college students'
+  currentModelStage: 'public-chinese-baseline' | 'target-domain-calibrated' | 'external-validated'
+  calibrationStatus: 'not-calibrated' | 'calibrated'
+  layers: NestedLearningLayer[]
+  caution: string
 }
 
 export interface RecordingArtifact {

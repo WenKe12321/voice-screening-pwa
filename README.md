@@ -189,6 +189,7 @@ npm run test:e2e
 
 - [隐私说明](docs/privacy.md)
 - [模型接入说明](docs/model-integration.md)
+- [用户友好筛查与开源项目调研](docs/user-friendly-risk-and-open-source-review.md)
 - [模型训练说明](docs/training.md)
 - [多层嵌套学习框架](docs/nested-learning-framework.md)
 - [中文大学生目标域语音数据来源](docs/target-domain-data-sources.md)

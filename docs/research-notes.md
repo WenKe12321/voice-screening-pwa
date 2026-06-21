@@ -48,3 +48,5 @@ MODMA EULA 要求：
 不同来源的数据不能直接混合报告准确率。EATD 的 SDS 自评标签、Androids 的患者/对照标签和 MODMA 的临床信息需要分别解释。
 
 中文大学生目标域语音的筛选结果、申请入口和许可边界见 [目标域数据来源](target-domain-data-sources.md)。
+
+面向有抑郁情绪用户的友好设计、辅助判断机制和可借鉴开源项目见 [用户友好筛查与开源项目调研](user-friendly-risk-and-open-source-review.md)。
